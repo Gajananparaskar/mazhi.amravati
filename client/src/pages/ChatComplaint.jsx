@@ -299,7 +299,10 @@ export default function ChatComplaint() {
     }
   }, [messages, sending]);
 
-  const streamAssistantReply = (fullText, onDone) => {
+  const streamAssistantReply = (text, onDone) => {
+    const fullText = (text && typeof text === 'string' && text.trim())
+      ? text
+      : (lang === 'mr' ? 'नमस्कार! कृपया आपली समस्या सविस्तर सांगा.' : 'Hello! How can I help with your civic complaint today?');
     if (typewriterRef.current) clearInterval(typewriterRef.current);
     let index = 0;
     // Append placeholder assistant message
@@ -461,7 +464,8 @@ export default function ChatComplaint() {
         },
       });
       setSending(false);
-      streamAssistantReply(data.reply);
+      const replyText = data?.reply || (lang === 'mr' ? 'माहिती दिल्याबद्दल धन्यवाद. कृपया पुढे सांगा.' : 'Thank you for the message. How can I help further?');
+      streamAssistantReply(replyText);
       setExtracted((prev) => {
         const nextCat = data.category ?? prev.category;
         const nextDesc = data.description ?? prev.description;
@@ -480,7 +484,10 @@ export default function ChatComplaint() {
       });
     } catch (err) {
       setSending(false);
-      setError(err.response?.data?.error || 'The AI assistant is unavailable right now.');
+      console.error('Chat error:', err);
+      const errMsg = err.response?.data?.error || err.message || 'The AI assistant is unavailable right now.';
+      setError(errMsg);
+      streamAssistantReply(lang === 'mr' ? 'क्षमस्व, सर्व्हरशी संपर्क होऊ शकला नाही. कृपया थोड्या वेळाने पुन्हा प्रयत्न करा.' : 'Sorry, could not reach the server. Please try again.');
     }
   };
 

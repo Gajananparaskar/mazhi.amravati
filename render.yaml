@@ -34,8 +34,5 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: mazhi-amravati-api
-          property: host
+        value: https://mazhi-amravati-api-j318.onrender.com
 

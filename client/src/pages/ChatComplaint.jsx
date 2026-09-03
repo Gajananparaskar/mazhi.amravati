@@ -129,6 +129,7 @@ export default function ChatComplaint() {
 
   const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const typewriterRef = useRef(null);
 
   // Voice recognition setup
   const SpeechRecognitionCtor = useRef(
@@ -301,16 +302,47 @@ export default function ChatComplaint() {
     }
   }, [messages, sending]);
 
-  const sendMessage = async (text) => {
+  const streamAssistantReply = (fullText, onDone) => {
+    if (typewriterRef.current) clearInterval(typewriterRef.current);
+    let index = 0;
+    // Append placeholder assistant message
+    setMessages((prev) => [...prev, { role: 'assistant', text: '' }]);
+
+    typewriterRef.current = setInterval(() => {
+      index += 3; // Stream 3 chars per 12ms for smooth fast typing
+      if (index < fullText.length) {
+        const partial = fullText.slice(0, index);
+        setMessages((prev) => {
+          const next = [...prev];
+          if (next.length > 0) {
+            next[next.length - 1] = { role: 'assistant', text: partial };
+          }
+          return next;
+        });
+      } else {
+        setMessages((prev) => {
+          const next = [...prev];
+          if (next.length > 0) {
+            next[next.length - 1] = { role: 'assistant', text: fullText };
+          }
+          return next;
+        });
+        clearInterval(typewriterRef.current);
+        typewriterRef.current = null;
+        if (onDone) onDone();
+      }
+    }, 12);
+  };
+
+  const sendMessage = async (text, isInstantChip = false) => {
     const outgoing = text ?? input;
     if (!outgoing.trim() || sending) return;
     setError('');
     const priorMessages = messages;
     setMessages((m) => [...m, { role: 'user', text: outgoing }]);
     setInput('');
-    setSending(true);
 
-    // Optimistic local heuristic extraction for 0ms instant UI update
+    // Instant local heuristic extraction for 0ms UI update
     const lower = outgoing.toLowerCase();
     let optCat = null;
     if (lower.includes('street') || lower.includes('light') || lower.includes('दिवा') || lower.includes('लाईट') || lower.includes('लाइट')) optCat = 'street_light';
@@ -319,21 +351,38 @@ export default function ChatComplaint() {
     else if (lower.includes('water') || lower.includes('pipe') || lower.includes('पाणी') || lower.includes('नल') || lower.includes('जल')) optCat = 'water_supply';
     else if (lower.includes('drain') || lower.includes('sewer') || lower.includes('गटार') || lower.includes('नाली')) optCat = 'drainage_sewer';
 
-    if (optCat && !extracted.category) {
+    // ── Instant 0ms chip handling for category clicks ──
+    if (isInstantChip && optCat && !extracted.category) {
       setExtracted((prev) => ({
         ...prev,
         category: optCat,
         description: prev.description || outgoing,
       }));
+      const instantPrompt = lang === 'mr'
+        ? 'समजले. अमरावतीमध्ये हा प्रश्न कोणत्या भागात किंवा लँडमार्कजवळ (उदा. राजकमल चौक, गाडगे नगर, बडनेरा रोड) आहे?'
+        : lang === 'hi'
+        ? 'समझ गया। अमरावती में यह समस्या किस क्षेत्र या लैंडमार्क के पास है?'
+        : 'Got it! Which area or landmark in Amravati is this located (e.g. Rajkamal Chowk, Gadge Nagar, Badnera Road)?';
+      
+      streamAssistantReply(instantPrompt);
+      // Fire background sync silently without blocking UI
+      api.post('/chatbot/message', {
+        message: outgoing,
+        history: priorMessages.map((m) => ({ role: m.role, text: m.text })),
+        language: lang,
+      }).catch(() => {});
+      return;
     }
 
+    setSending(true);
     try {
       const { data } = await api.post('/chatbot/message', {
         message: outgoing,
         history: priorMessages.map((m) => ({ role: m.role, text: m.text })),
         language: lang,
       });
-      setMessages((m) => [...m, { role: 'assistant', text: data.reply }]);
+      setSending(false);
+      streamAssistantReply(data.reply);
       setExtracted((prev) => ({
         category:            data.category            ?? prev.category,
         description:         data.description         ?? prev.description,
@@ -345,9 +394,8 @@ export default function ChatComplaint() {
         ready_to_submit:     !!data.ready_to_submit,
       }));
     } catch (err) {
-      setError(err.response?.data?.error || 'The AI assistant is unavailable right now.');
-    } finally {
       setSending(false);
+      setError(err.response?.data?.error || 'The AI assistant is unavailable right now.');
     }
   };
 
@@ -624,6 +672,10 @@ export default function ChatComplaint() {
   const removePhoto = (p) => setPhotos((ph) => ph.filter((x) => x !== p));
 
   const startNewChat = () => {
+    if (typewriterRef.current) {
+      clearInterval(typewriterRef.current);
+      typewriterRef.current = null;
+    }
     recognitionRef.current?.stop();
     setListening(false);
     setVoiceError('');
@@ -870,7 +922,7 @@ export default function ChatComplaint() {
                     if (opt.isGPS) {
                       sendCurrentLocation();
                     } else {
-                      sendMessage(opt.text);
+                      sendMessage(opt.text, true);
                     }
                   }}
                   disabled={sending || locatingCurrent}

@@ -120,8 +120,8 @@ router.post('/message', authOptional, async (req, res) => {
         config: {
           systemInstruction: buildSystemPrompt(language),
           responseMimeType: 'application/json',
-          maxOutputTokens: 380,
-          temperature: 0.1,
+          maxOutputTokens: 350,
+          temperature: 0.0,
         },
       });
       const raw = (resp.text || '').trim();

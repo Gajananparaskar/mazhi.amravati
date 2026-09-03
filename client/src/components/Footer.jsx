@@ -78,7 +78,6 @@ export default function Footer() {
             <li><Link to="/complaint" className="hover:text-saffron-400 transition-colors flex items-center gap-1.5"><span className="text-slate-600">›</span> {t('fileComplaint')}</Link></li>
             <li><Link to="/track"     className="hover:text-saffron-400 transition-colors flex items-center gap-1.5"><span className="text-slate-600">›</span> {t('trackComplaint')}</Link></li>
             <li><Link to="/map"       className="hover:text-saffron-400 transition-colors flex items-center gap-1.5"><span className="text-slate-600">›</span> {t('issueMap')}</Link></li>
-            <li><Link to="/leaderboard" className="hover:text-saffron-400 transition-colors flex items-center gap-1.5"><span className="text-slate-600">›</span> {lang === 'mr' ? 'नागरिक लीडरबोर्ड' : lang === 'hi' ? 'नागरिक लीडरबोर्ड' : 'Citizen Leaderboard'}</Link></li>
             <li><Link to="/help"      className="hover:text-saffron-400 transition-colors flex items-center gap-1.5"><span className="text-slate-600">›</span> {t('help')}</Link></li>
           </ul>
         </div>

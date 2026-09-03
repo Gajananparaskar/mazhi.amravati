@@ -14,7 +14,6 @@ import MapDashboard from './pages/MapDashboard.jsx';
 import OfficerDashboard from './pages/OfficerDashboard.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 import Transparency from './pages/Transparency.jsx';
-import Leaderboard from './pages/Leaderboard.jsx';
 
 export default function App() {
   return (
@@ -31,7 +30,6 @@ export default function App() {
             <Route path="/map" element={<MapDashboard />} />
             <Route path="/transparency" element={<Transparency />} />
             <Route path="/analytics" element={<Transparency />} />
-            <Route path="/leaderboard" element={<Leaderboard />} />
             <Route
               path="/officer"
               element={

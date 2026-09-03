@@ -28,7 +28,6 @@ export default function Navbar() {
     { to: '/track', label: t('trackComplaint') },
     { to: '/map', label: t('issueMap') },
     { to: '/transparency', label: lang === 'mr' ? 'पारदर्शकता' : lang === 'hi' ? 'पारदर्शिता' : 'Transparency' },
-    { to: '/leaderboard', label: lang === 'mr' ? 'लीडरबोर्ड' : lang === 'hi' ? 'लीडरबोर्ड' : 'Leaderboard' },
     { to: '/help', label: t('help') },
   ];
 

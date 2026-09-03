@@ -28,6 +28,47 @@ const AMRAVATI_BOUNDS = [
   [21.20, 78.10], // North-East corner
 ];
 
+// ── Map Styles (Street, Satellite, Clean Civic) ──────────────────────────────
+const TILE_LAYERS = {
+  positron: {
+    id: 'positron',
+    name: 'Clean Civic',
+    name_mr: 'स्वच्छ रस्ता नकाशा',
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; OpenStreetMap',
+    subdomains: 'abcd',
+    maxZoom: 20,
+  },
+  satellite: {
+    id: 'satellite',
+    name: 'Satellite',
+    name_mr: 'उपग्रह दृश्य (Satellite)',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+    maxZoom: 18,
+  },
+  osm: {
+    id: 'osm',
+    name: 'Standard OSM',
+    name_mr: 'मानक रस्ते',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  },
+};
+
+// ── Key Amravati Neighborhoods for Quick Jump ────────────────────────────────
+const AMRAVATI_LANDMARKS = [
+  { id: 'rajkamal', name: 'Rajkamal Chowk', name_mr: '🏛️ राजकमल चौक', coords: [20.9320, 77.7523], zoom: 16 },
+  { id: 'badnera', name: 'Badnera Station', name_mr: '🚂 बडनेरा स्टेशन', coords: [20.8710, 77.7450], zoom: 15 },
+  { id: 'panchavati', name: 'Panchavati Square', name_mr: '🛣️ पंचवटी चौक', coords: [20.9410, 77.7680], zoom: 16 },
+  { id: 'gadge', name: 'Gadge Nagar', name_mr: '🎓 गाडगे नगर', coords: [20.9520, 77.7650], zoom: 15 },
+  { id: 'camp', name: 'Camp Area', name_mr: '🌳 कॅम्प परिसर', coords: [20.9360, 77.7420], zoom: 15 },
+  { id: 'irwin', name: 'Irwin Hospital', name_mr: '🏥 इर्विन चौक', coords: [20.9350, 77.7560], zoom: 16 },
+  { id: 'rukmini', name: 'Rukmini Nagar', name_mr: '🛕 रुक्मिणी नगर', coords: [20.9270, 77.7620], zoom: 16 },
+  { id: 'dastur', name: 'Dastur Nagar', name_mr: '🏢 दस्तुर नगर', coords: [20.9180, 77.7810], zoom: 15 },
+];
+
 // ── Category Config ───────────────────────────────────────────────────────────
 const CAT = {
   water_supply:    { color: '#2563eb', bg: '#dbeafe', icon: <Droplets size={14} /> },
@@ -271,6 +312,17 @@ function AmravatiCenterButton() {
   );
 }
 
+// ── Landmark Quick Fly-To Navigator Component ────────────────────────────────
+function LandmarkNavigator({ target }) {
+  const map = useMap();
+  useEffect(() => {
+    if (target && target.coords) {
+      map.flyTo(target.coords, target.zoom || 16, { duration: 1.2 });
+    }
+  }, [target, map]);
+  return null;
+}
+
 // ── Main Component ───────────────────────────────────────────────────────────
 export default function MapDashboard() {
   const { lang, tCategory } = useI18n();
@@ -288,6 +340,8 @@ export default function MapDashboard() {
   const [locating, setLocating] = useState(false);
   const [myCoords, setMyCoords] = useState(null);
   const [heatmapMode, setHeatmapMode] = useState(false);
+  const [mapTile, setMapTile] = useState('positron');
+  const [selectedLandmark, setSelectedLandmark] = useState(null);
 
   useEffect(() => { document.title = 'Issue Map — Mazhi Amravati'; }, []);
 
@@ -359,6 +413,14 @@ export default function MapDashboard() {
     return { total, resolved, inProgress, topVoted };
   }, [complaints]);
 
+  const catCounts = useMemo(() => {
+    const counts = {};
+    for (const c of complaints) {
+      counts[c.category] = (counts[c.category] || 0) + 1;
+    }
+    return counts;
+  }, [complaints]);
+
   const activeFiltersCount = (catFilter ? 1 : 0) + (statusFilter ? 1 : 0);
 
   return (
@@ -386,6 +448,43 @@ export default function MapDashboard() {
 
           {/* Controls */}
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Map Style Switcher (Street / Satellite) */}
+            <div className="flex items-center bg-stone-100 border border-[#d6c4aa] rounded-xl p-0.5">
+              <button
+                onClick={() => setMapTile('positron')}
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                  mapTile === 'positron'
+                    ? 'bg-white text-stone-900 shadow-2xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+                title="Clean Civic Street View"
+              >
+                🗺️ {lang === 'mr' ? 'रस्ता' : 'Street'}
+              </button>
+              <button
+                onClick={() => setMapTile('satellite')}
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                  mapTile === 'satellite'
+                    ? 'bg-stone-900 text-white shadow-2xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+                title="High-Resolution Satellite View"
+              >
+                🛰️ {lang === 'mr' ? 'उपग्रह' : 'Satellite'}
+              </button>
+              <button
+                onClick={() => setMapTile('osm')}
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all hidden sm:inline-block ${
+                  mapTile === 'osm'
+                    ? 'bg-white text-stone-900 shadow-2xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+                title="OpenStreetMap Standard"
+              >
+                OSM
+              </button>
+            </div>
+
             {/* Locate me */}
             <button
               onClick={locateMe}
@@ -446,6 +545,60 @@ export default function MapDashboard() {
           </div>
 
         </div>
+      </div>
+
+      {/* Amravati Neighborhood Quick Jump Ribbon */}
+      <div className="bg-[#f7f2e7] border-b border-[#ebdcc9] px-4 py-2 overflow-x-auto scrollbar-none flex items-center gap-1.5 text-xs">
+        <span className="text-[10px] uppercase font-black text-stone-500 shrink-0 mr-1 flex items-center gap-1">
+          📍 {lang === 'mr' ? 'परिसर निवडा:' : 'Jump to Area:'}
+        </span>
+        {AMRAVATI_LANDMARKS.map((lm) => (
+          <button
+            key={lm.id}
+            onClick={() => setSelectedLandmark({ ...lm, ts: Date.now() })}
+            className="shrink-0 text-xs font-semibold px-3 py-1 rounded-full bg-white hover:bg-[#faeedd] border border-[#d6c4aa] text-stone-700 hover:text-[#b85828] shadow-2xs transition-all hover:scale-105 flex items-center gap-1"
+          >
+            <span>{lang === 'mr' ? lm.name_mr : lm.name}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Category Quick Filter Pills with Counts */}
+      <div className="bg-white border-b border-[#ebdcc9] px-4 py-2 overflow-x-auto scrollbar-none flex items-center gap-2 text-xs">
+        <button
+          onClick={() => setCatFilter('')}
+          className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${
+            !catFilter
+              ? 'bg-[#b85828] text-white border-[#b85828] shadow-xs'
+              : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
+          }`}
+        >
+          <span>{lang === 'mr' ? 'सर्व समस्या' : 'All Issues'}</span>
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${!catFilter ? 'bg-white/25 text-white' : 'bg-stone-200 text-stone-800'}`}>
+            {stats.total}
+          </span>
+        </button>
+        {Object.entries(CAT).map(([key, cfg]) => {
+          const count = catCounts[key] || 0;
+          const isSelected = catFilter === key;
+          return (
+            <button
+              key={key}
+              onClick={() => setCatFilter(isSelected ? '' : key)}
+              className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${
+                isSelected
+                  ? 'bg-stone-900 text-white border-stone-900 shadow-xs'
+                  : 'bg-white text-stone-700 border-[#ebdcc9] hover:bg-[#faeedd]'
+              }`}
+            >
+              <span className="w-2.5 h-2.5 rounded-full" style={{ background: cfg.color }} />
+              <span>{catLabel(key)}</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${isSelected ? 'bg-white/20 text-white' : 'bg-[#faeedd] text-[#b85828]'}`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Error notification banner */}
@@ -559,16 +712,21 @@ export default function MapDashboard() {
           maxBoundsViscosity={0.8}
           scrollWheelZoom
           preferCanvas={true}
-          style={{ height: 'calc(100vh - 240px)', minHeight: '480px', width: '100%' }}
+          style={{ height: 'calc(100vh - 270px)', minHeight: '480px', width: '100%' }}
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-            maxZoom={19}
+            key={mapTile}
+            attribution={TILE_LAYERS[mapTile].attribution}
+            url={TILE_LAYERS[mapTile].url}
+            subdomains={TILE_LAYERS[mapTile].subdomains || 'abc'}
+            maxZoom={TILE_LAYERS[mapTile].maxZoom || 19}
           />
 
           {/* Reset to Amravati Center Button */}
           <AmravatiCenterButton />
+
+          {/* Landmark Navigator */}
+          <LandmarkNavigator target={selectedLandmark} />
 
           {myCoords && <FlyTo coords={myCoords} />}
 

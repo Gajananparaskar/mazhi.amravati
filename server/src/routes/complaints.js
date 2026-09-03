@@ -97,6 +97,9 @@ router.post('/', authOptional, (req, res) => {
   const dept = assignDepartment(category);
   const publicId = generateTrackingId();
 
+  const finalName = (guest_name && guest_name.trim()) || (req.user ? req.user.name : 'Citizen');
+  const finalContact = (guest_contact && guest_contact.trim()) || (req.user ? req.user.phone : null);
+
   const info = db
     .prepare(
       `INSERT INTO complaints
@@ -107,8 +110,8 @@ router.post('/', authOptional, (req, res) => {
     .run(
       publicId,
       req.user ? req.user.id : null,
-      req.user ? null : guest_name || 'Guest',
-      req.user ? null : guest_contact || null,
+      finalName,
+      finalContact,
       category,
       description,
       summary || null,
@@ -131,8 +134,8 @@ router.post('/', authOptional, (req, res) => {
   // Sync to Supabase PostgreSQL in background
   syncComplaintToSupabase({
     public_id: publicId,
-    guest_name: req.user ? null : guest_name || 'Guest',
-    guest_contact: req.user ? null : guest_contact || null,
+    guest_name: finalName,
+    guest_contact: finalContact,
     category,
     description,
     summary: summary || null,

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Bot, Send, Image as ImageIcon, X, MapPin, CheckCircle2, Loader2,
   RefreshCcw, ThumbsUp, Map as MapIcon, AlertCircle, Users,
-  Mic, MicOff, LocateFixed,
+  Mic, MicOff, LocateFixed, User, Phone,
 } from 'lucide-react';
 import { useI18n } from '../i18n.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -104,8 +104,16 @@ export default function ChatComplaint() {
   const [uploading, setUploading]     = useState(false);
   const [locationData, setLocationData] = useState(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [guestName, setGuestName]     = useState('');
-  const [guestContact, setGuestContact] = useState('');
+  const [guestName, setGuestName]     = useState(user?.name || '');
+  const [guestContact, setGuestContact] = useState(user?.phone || '');
+
+  useEffect(() => {
+    if (user) {
+      setGuestName((prev) => prev || user.name || '');
+      setGuestContact((prev) => prev || user.phone || '');
+    }
+  }, [user]);
+
   const [submitting, setSubmitting]   = useState(false);
   const [submitted, setSubmitted]     = useState(null);
   const [error, setError]             = useState('');
@@ -469,8 +477,8 @@ export default function ChatComplaint() {
         longitude:   locationData?.lng  ?? extracted.longitude,
         photos,
         chat_transcript: messages,
-        guest_name:    user ? undefined : guestName  || 'Guest',
-        guest_contact: user ? undefined : guestContact || undefined,
+        guest_name:    guestName.trim() || user?.name || 'Citizen',
+        guest_contact: guestContact.trim() || user?.phone || undefined,
       });
       setSubmitted(data.complaint);
     } catch (err) {
@@ -763,7 +771,7 @@ export default function ChatComplaint() {
                 <CheckCircle2 size={16} className="text-[#b85828]" /> {t('complaintSummary')}
               </h3>
               <span className="text-[10px] font-bold font-mono px-2.5 py-0.5 rounded-full bg-[#faeedd] border border-[#ebdcc9] text-[#b85828]">
-                {[Boolean(extracted.category), Boolean(locationData?.address || extracted.location_text), Boolean(extracted.description), photos.length > 0].filter(Boolean).length}/4 Complete
+                {[Boolean(extracted.category), Boolean(locationData?.address || extracted.location_text), Boolean(extracted.description), Boolean(guestName || user?.name), Boolean(guestContact || user?.phone)].filter(Boolean).length}/5 Complete
               </span>
             </div>
             <div className="space-y-2.5 text-sm">
@@ -781,6 +789,11 @@ export default function ChatComplaint() {
                 label={t('details')}
                 value={[extracted.description, extracted.duration_or_details].filter(Boolean).join(' · ') || '—'}
                 completed={Boolean(extracted.description)}
+              />
+              <SummaryRow
+                label={lang === 'mr' ? 'तक्रारदार' : lang === 'hi' ? 'नागरिक' : 'Citizen Info'}
+                value={[guestName || user?.name, guestContact || user?.phone].filter(Boolean).join(' · ') || '—'}
+                completed={Boolean((guestName || user?.name) && (guestContact || user?.phone))}
               />
               <SummaryRow
                 label={t('photos')}
@@ -815,24 +828,45 @@ export default function ChatComplaint() {
               </div>
             )}
 
-            {/* Guest fields */}
-            {!user && (
-              <div className="mt-4 space-y-2 border-t border-[#ebdcc9] pt-4">
-                <p className="text-xs text-stone-500 font-medium">Guest details (optional — helps us follow up)</p>
-                <input
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                  placeholder={t('name')}
-                  className="w-full text-sm border border-[#d6c4aa] rounded-xl px-3 py-2 bg-[#fbf8f2] text-stone-900 placeholder-stone-400 focus:bg-white focus:border-[#b85828] focus:outline-none transition-all"
-                />
-                <input
-                  value={guestContact}
-                  onChange={(e) => setGuestContact(e.target.value)}
-                  placeholder={t('phone')}
-                  className="w-full text-sm border border-[#d6c4aa] rounded-xl px-3 py-2 bg-[#fbf8f2] text-stone-900 placeholder-stone-400 focus:bg-white focus:border-[#b85828] focus:outline-none transition-all"
-                />
+            {/* Citizen Details (Name & Contact Number) */}
+            <div className="mt-4 border-t border-[#ebdcc9] pt-3.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black text-stone-900 flex items-center gap-1.5">
+                  <User size={13} className="text-[#b85828]" />
+                  <span>{lang === 'mr' ? 'आपले नाव व संपर्क नंबर' : lang === 'hi' ? 'आपका नाम व संपर्क नंबर' : 'Your Name & Contact Number'}</span>
+                </label>
+                <span className="text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                  {lang === 'mr' ? 'अधिकारी संपर्कासाठी' : 'For officer follow-up'}
+                </span>
               </div>
-            )}
+              <div className="space-y-2">
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-stone-400">
+                    <User size={13} />
+                  </div>
+                  <input
+                    type="text"
+                    value={guestName}
+                    onChange={(e) => setGuestName(e.target.value)}
+                    placeholder={lang === 'mr' ? 'आपले पूर्ण नाव (उदा. राहुल देशमुख)' : lang === 'hi' ? 'आपका पूरा नाम (उदा. राहुल देशमुख)' : 'Your Full Name (e.g. Rahul Deshmukh)'}
+                    className="w-full text-xs pl-8 pr-3 py-2.5 border border-[#d6c4aa] rounded-xl bg-[#fbf8f2] text-stone-900 placeholder-stone-400 focus:bg-white focus:border-[#b85828] focus:ring-1 focus:ring-[#b85828] focus:outline-none transition-all font-medium"
+                  />
+                </div>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-stone-400">
+                    <Phone size={13} />
+                  </div>
+                  <input
+                    type="tel"
+                    maxLength={10}
+                    value={guestContact}
+                    onChange={(e) => setGuestContact(e.target.value.replace(/\D/g, ''))}
+                    placeholder={lang === 'mr' ? '१०-अंकी मोबाईल नंबर (उदा. ९८XXXXXXXX)' : lang === 'hi' ? '१०-अंकीय मोबाइल नंबर (उदा. ९८XXXXXXXX)' : '10-Digit Mobile / WhatsApp Number'}
+                    className="w-full text-xs pl-8 pr-3 py-2.5 border border-[#d6c4aa] rounded-xl bg-[#fbf8f2] text-stone-900 placeholder-stone-400 focus:bg-white focus:border-[#b85828] focus:ring-1 focus:ring-[#b85828] focus:outline-none transition-all font-mono"
+                  />
+                </div>
+              </div>
+            </div>
 
             {/* Submit button */}
             <button

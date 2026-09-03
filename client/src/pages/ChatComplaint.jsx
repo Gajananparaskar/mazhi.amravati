@@ -390,33 +390,6 @@ export default function ChatComplaint() {
     }
   };
 
-  const QUICK_TOPICS = {
-    en: [
-      { label: '💡 Street Light', text: 'Streetlight is not working' },
-      { label: '🕳️ Roads / Potholes', text: 'There is a pothole on the road' },
-      { label: '🗑️ Garbage Waste', text: 'Garbage has not been collected' },
-      { label: '🚰 Water Supply', text: 'Water supply pipeline problem' },
-      { label: '🌊 Drainage / Sewer', text: 'Drainage is overflowing' },
-      { label: '⚠️ Other Problem', text: 'I want to report a civic issue' },
-    ],
-    mr: [
-      { label: '💡 स्ट्रीट लाईट', text: 'रस्त्यावरील स्ट्रीट लाईट बंद आहे' },
-      { label: '🕳️ रस्त्यावर खड्डा', text: 'रस्त्यावर खड्डा पडला आहे' },
-      { label: '🗑️ कचरा साचला आहे', text: 'कचरा उचलला नाही' },
-      { label: '🚰 पाणीपुरवठा', text: 'पाणीपुरवठ्यात अडचण आहे' },
-      { label: '🌊 गटार ओव्हरफ्लो', text: 'गटाराचे घाण पाणी वाहत आहे' },
-      { label: '⚠️ इतर समस्या', text: 'मला नागरी समस्येची तक्रार करायची आहे' },
-    ],
-    hi: [
-      { label: '💡 स्ट्रीट लाइट', text: 'सड़क की स्ट्रीट लाइट बंद है' },
-      { label: '🕳️ सड़क पर गड्ढा', text: 'सड़क पर गड्ढा है' },
-      { label: '🗑️ कचरे का ढेर', text: 'कचरा नहीं उठाया गया है' },
-      { label: '🚰 पानी सप्लाई', text: 'पानी की सप्लाई में समस्या है' },
-      { label: '🌊 नाली ओवरफ्लो', text: 'नाली का गंदा पानी बह रहा है' },
-      { label: '⚠️ अन्य समस्या', text: 'मुझे नागरिक समस्या की शिकायत करनी है' },
-    ],
-  };
-
   const removePhoto = (p) => setPhotos((ph) => ph.filter((x) => x !== p));
 
   const startNewChat = () => {
@@ -644,25 +617,7 @@ export default function ChatComplaint() {
           )}
 
           {/* Input bar */}
-          <div className="border-t border-[#ebdcc9] px-4 pt-2.5 pb-2 bg-white">
-            {/* Quick problem selection chips — normal, clean, and never change into "select location or details" */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 mb-1.5 scrollbar-none">
-              <span className="text-[10px] text-[#b85828] bg-[#faeedd] px-2.5 py-0.5 rounded-full uppercase font-extrabold tracking-wider shrink-0 mr-1 border border-[#ebdcc9] flex items-center gap-1">
-                {lang === 'mr' ? 'समस्या निवडा:' : lang === 'hi' ? 'समस्या चुनें:' : 'Quick Select:'}
-              </span>
-              {(QUICK_TOPICS[lang] || QUICK_TOPICS.en).map((topic, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => sendMessage(topic.text)}
-                  disabled={sending}
-                  className="shrink-0 text-xs px-3 py-1 rounded-full border border-[#ebdcc9] bg-[#fbf8f2] hover:border-[#b85828] hover:bg-[#faeedd] text-stone-700 hover:text-[#b85828] shadow-2xs font-medium transition-all"
-                >
-                  {topic.label}
-                </button>
-              ))}
-            </div>
-
+          <div className="border-t border-[#ebdcc9] px-4 pt-3 pb-2 bg-white">
             {/* AI Vision Status indicator */}
             {analyzingImage && (
               <div className="flex items-center gap-2 px-3 py-1.5 mb-2 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-900 animate-pulse font-medium">

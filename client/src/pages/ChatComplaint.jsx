@@ -3,13 +3,13 @@ import { Link } from 'react-router-dom';
 import {
   Bot, Send, Image as ImageIcon, X, MapPin, CheckCircle2, Loader2,
   RefreshCcw, ThumbsUp, Map as MapIcon, AlertCircle, Users,
-  Mic, MicOff, User, Phone,
+  Mic, MicOff, LocateFixed, User, Phone,
 } from 'lucide-react';
 import { useI18n } from '../i18n.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import api, { fileUrl } from '../api.js';
 import Navbar from '../components/Navbar.jsx';
-import LocationPicker from '../components/LocationPicker.jsx';
+import LocationPicker, { fetchDetailedAddress } from '../components/LocationPicker.jsx';
 import ComplaintReceipt from '../components/ComplaintReceipt.jsx';
 
 const CAT_LABEL = {
@@ -122,7 +122,8 @@ export default function ChatComplaint() {
   const [voiceError, setVoiceError]       = useState('');
   const recognitionRef                    = useRef(null);
 
-  // Inline map location state
+  // Inline map & GPS location state
+  const [locatingCurrent, setLocatingCurrent]                   = useState(false);
   const [showInlineLocationPicker, setShowInlineLocationPicker] = useState(false);
 
   // Similar issue check state
@@ -236,6 +237,50 @@ export default function ChatComplaint() {
       setListening(false);
     }
   }, [lang]);
+
+  // ── Send current location as chat message ────────────────────────────────
+  const sendCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setError(lang === 'mr' ? 'आपल्या ब्राउझरमध्ये लोकेशन सपोर्ट नाही.' : 'Geolocation is not supported in this browser.');
+      return;
+    }
+    setLocatingCurrent(true);
+    setError('');
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        try {
+          const addr = await fetchDetailedAddress(lat, lng);
+          setLocationData({ lat, lng, address: addr });
+          setExtracted((prev) => ({
+            ...prev,
+            location_text: addr,
+            latitude: lat,
+            longitude: lng,
+          }));
+          sendMessage(`${addr} (GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)})`);
+        } catch {
+          const fallbackAddr = 'Amravati, Maharashtra';
+          setLocationData({ lat, lng, address: fallbackAddr });
+          setExtracted((prev) => ({
+            ...prev,
+            location_text: fallbackAddr,
+            latitude: lat,
+            longitude: lng,
+          }));
+          sendMessage(`${fallbackAddr} (GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)})`);
+        } finally {
+          setLocatingCurrent(false);
+        }
+      },
+      (err) => {
+        setLocatingCurrent(false);
+        console.warn('Geolocation error:', err);
+        setError(lang === 'mr' ? 'GPS स्थान मिळवता आले नाही. कृपया लोकेशन परवानगी तपासा.' : 'Could not get location. Please allow location access.');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
@@ -543,10 +588,10 @@ export default function ChatComplaint() {
         />
       )}
 
-      <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 grid lg:grid-cols-[1fr_360px] gap-6 items-start">
+      <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 grid lg:grid-cols-[1fr_340px] gap-6">
 
-        {/* ── Chat panel ─────────────────────────────────────── */}
-        <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-[#ebdcc9] shadow-xl flex flex-col h-[calc(100vh-140px)] min-h-[580px] max-h-[760px] overflow-hidden">
+        {/* ── Chat panel (Fluid h-[75vh] like before) ── */}
+        <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-[#ebdcc9] shadow-xl flex flex-col h-[75vh] min-h-[560px] overflow-hidden">
           {/* Subtle top hairline */}
           <div className="h-1 bg-gradient-to-r from-amber-500 via-orange-400 to-[#c8682e]" />
 
@@ -636,20 +681,35 @@ export default function ChatComplaint() {
               </div>
             )}
 
-            {/* Quick-action row */}
-            <div className="flex items-center gap-2 mb-2">
+            {/* Quick-action row: Choose Current Location along with Pick on Map */}
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              {/* Choose Current Location */}
+              <button
+                type="button"
+                onClick={sendCurrentLocation}
+                disabled={locatingCurrent || sending}
+                title="Use my current GPS location"
+                className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1 rounded-full border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 transition-colors shadow-2xs cursor-pointer"
+              >
+                {locatingCurrent
+                  ? <Loader2 size={11} className="animate-spin text-emerald-600" />
+                  : <LocateFixed size={11} className="text-emerald-700" />}
+                <span>{locatingCurrent ? (lang === 'mr' ? 'स्थान शोधत आहे…' : 'Locating…') : (lang === 'mr' ? 'चालू स्थान निवडा' : lang === 'hi' ? 'वर्तमान स्थान चुनें' : 'Choose Current Location')}</span>
+              </button>
+
               {/* Open map picker */}
               <button
                 type="button"
                 onClick={() => setShowInlineLocationPicker((v) => !v)}
                 title="Pick location on map"
-                className={`flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${
+                className={`flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1 rounded-full border transition-colors shadow-2xs cursor-pointer ${
                   showInlineLocationPicker
                     ? 'border-[#b85828] bg-[#faeedd] text-[#b85828]'
                     : 'border-[#d6c4aa] bg-[#fbf8f2] text-stone-700 hover:bg-[#faeedd]'
                 }`}
               >
-                <MapPin size={11} /> {showInlineLocationPicker ? (lang === 'mr' ? 'नकाशा बंद करा' : 'Close Map') : (lang === 'mr' ? 'नकाशावर निवडा' : 'Pick on Map')}
+                <MapPin size={11} />
+                <span>{showInlineLocationPicker ? (lang === 'mr' ? 'नकाशा बंद करा' : 'Close Map') : (lang === 'mr' ? 'नकाशावर निवडा' : lang === 'hi' ? 'मानचित्र पर चुनें' : 'Pick on Map')}</span>
               </button>
             </div>
 
@@ -742,7 +802,7 @@ export default function ChatComplaint() {
         </div>
 
         {/* ── Summary sidebar (Equal Height Matching Chatbox) ── */}
-        <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-[#ebdcc9] shadow-xl p-5 flex flex-col h-[calc(100vh-140px)] min-h-[580px] max-h-[760px] overflow-hidden">
+        <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-[#ebdcc9] shadow-xl p-5 flex flex-col h-[75vh] min-h-[560px] overflow-hidden">
           {/* Header */}
           <div className="shrink-0 flex items-center justify-between pb-3 border-b border-[#ebdcc9]">
             <h3 className="font-black text-stone-900 text-sm flex items-center gap-2">

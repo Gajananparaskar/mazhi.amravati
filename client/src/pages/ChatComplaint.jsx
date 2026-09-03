@@ -138,6 +138,7 @@ export default function ChatComplaint() {
   const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const typewriterRef = useRef(null);
+  const baseVoiceTextRef = useRef('');
 
   // Voice recognition setup
   const SpeechRecognitionCtor = useRef(
@@ -188,67 +189,72 @@ export default function ChatComplaint() {
   const toggleListening = useCallback(() => {
     const SR = SpeechRecognitionCtor.current;
     if (!SR) {
-      setVoiceError('Voice input is not supported in this browser. Please use Chrome or Edge.');
+      setVoiceError('Voice input is not supported in this browser. Please use Google Chrome or Microsoft Edge.');
       return;
     }
 
-    // If already listening, stop
+    // If already listening, stop cleanly
     if (recognitionRef.current) {
-      recognitionRef.current.stop();
+      try {
+        recognitionRef.current.stop();
+      } catch (_) {}
       recognitionRef.current = null;
       setListening(false);
       return;
     }
 
     setVoiceError('');
-    const rec = new SR();
-    
-    // Dynamic speech recognition language matching selected UI language
-    const speechLangMap = {
-      mr: 'mr-IN',
-      hi: 'hi-IN',
-      en: 'en-IN',
-    };
-    rec.lang = speechLangMap[lang] || 'en-IN';
-    rec.interimResults = true;
-    rec.maxAlternatives = 1;
-    rec.continuous = false;
+    baseVoiceTextRef.current = input.trim();
 
-    let finalTranscript = '';
-    rec.onresult = (e) => {
-      let interim = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) finalTranscript += t;
-        else interim += t;
-      }
-      // Use zero-width space as a boundary: everything after it is interim/in-progress
-      setInput((prev) => {
-        const base = prev.replace(/\u200B.*$/, '');
-        return base + '\u200B' + (finalTranscript || interim);
-      });
-    };
-    rec.onerror = (e) => {
-      if (e.error === 'audio-capture') {
-        setVoiceError('Microphone not found or permission denied. Please allow mic access and ensure you are on HTTPS.');
-      } else if (e.error === 'not-allowed') {
-        setVoiceError('Microphone permission denied. Please allow access in your browser settings.');
-      } else if (e.error !== 'no-speech') {
-        setVoiceError('Voice error: ' + e.error);
-      }
-      recognitionRef.current = null;
+    try {
+      const rec = new SR();
+
+      // Dynamic speech recognition language matching selected UI language
+      const speechLangMap = {
+        mr: 'mr-IN',
+        hi: 'hi-IN',
+        en: 'en-IN',
+      };
+      rec.lang = speechLangMap[lang] || 'en-IN';
+      rec.interimResults = true;
+      rec.maxAlternatives = 1;
+      rec.continuous = true; // Continuous listening so pauses don't cut off speech abruptly
+
+      rec.onresult = (e) => {
+        let transcript = '';
+        for (let i = 0; i < e.results.length; i++) {
+          transcript += e.results[i][0].transcript;
+        }
+        const base = baseVoiceTextRef.current;
+        setInput(base ? `${base} ${transcript.trim()}` : transcript.trim());
+      };
+
+      rec.onerror = (e) => {
+        if (e.error === 'audio-capture') {
+          setVoiceError('Microphone not found or permission denied. Please allow mic access in your browser.');
+        } else if (e.error === 'not-allowed') {
+          setVoiceError('Microphone permission blocked. Please allow microphone access in your browser address bar.');
+        } else if (e.error !== 'no-speech') {
+          setVoiceError(`Voice input: ${e.error}`);
+        }
+        recognitionRef.current = null;
+        setListening(false);
+      };
+
+      rec.onend = () => {
+        recognitionRef.current = null;
+        setListening(false);
+      };
+
+      recognitionRef.current = rec;
+      rec.start();
+      setListening(true);
+    } catch (err) {
+      console.warn('Speech recognition start error:', err);
+      setVoiceError('Could not start microphone. Please check browser microphone permissions.');
       setListening(false);
-    };
-    rec.onend = () => {
-      // Commit final — strip the zero-width space separator
-      setInput((prev) => prev.replace('\u200B', ''));
-      recognitionRef.current = null;
-      setListening(false);
-    };
-    recognitionRef.current = rec;
-    rec.start();
-    setListening(true);
-  }, [lang]);
+    }
+  }, [lang, input]);
 
   // ── Send current location as chat message ────────────────────────────────
   const sendCurrentLocation = () => {
@@ -684,6 +690,32 @@ export default function ChatComplaint() {
               </button>
             </div>
 
+            {/* Active Voice Listening Banner */}
+            {listening && (
+              <div className="flex items-center justify-between bg-red-50 border border-red-200 px-3.5 py-2 rounded-2xl mb-2 text-xs shadow-2xs animate-in fade-in slide-in-from-bottom-1">
+                <div className="flex items-center gap-2.5 text-red-700 font-bold">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+                  </span>
+                  <span>
+                    {lang === 'mr'
+                      ? '🎙️ माईक सुरू आहे — स्पष्ट बोला (मराठी / हिंदी / इंग्रजी)...'
+                      : lang === 'hi'
+                      ? '🎙️ माइक चालू है — स्पष्ट बोलिए (हिंदी / मराठी / अंग्रेजी)...'
+                      : '🎙️ Microphone active — Speak clearly in Marathi, Hindi or English...'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleListening}
+                  className="text-[11px] font-black bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-xl shadow-2xs transition-all flex items-center gap-1"
+                >
+                  {lang === 'mr' ? 'पूर्ण झाले ✓' : 'Done ✓'}
+                </button>
+              </div>
+            )}
+
             {/* Main input row */}
             <div className="flex items-center gap-2">
               <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleFiles} />
@@ -696,40 +728,50 @@ export default function ChatComplaint() {
                 {uploading ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={15} />}
               </button>
               <input
-                value={input.replace('\u200B', '')}
+                value={input.replace(/\u200B/g, '')}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                placeholder={listening ? '🎤 Listening…' : t('typeMessage')}
+                placeholder={listening ? (lang === 'mr' ? '🎤 ऐकत आहे... बोला' : '🎤 Listening… speak now') : t('typeMessage')}
                 className={`flex-1 bg-[#fbf8f2] border rounded-full px-4 py-2.5 text-sm text-stone-900 placeholder-stone-400 focus:bg-white focus:outline-none transition-all ${
-                  listening ? 'border-red-400 ring-2 ring-red-200' : 'border-[#d6c4aa] focus:border-[#b85828] focus:ring-2 focus:ring-[#b85828]/15'
+                  listening ? 'border-red-500 ring-2 ring-red-200 bg-red-50/30' : 'border-[#d6c4aa] focus:border-[#b85828] focus:ring-2 focus:ring-[#b85828]/15'
                 }`}
               />
-              {/* Mic button — shown always; shows error if API unavailable */}
+              {/* Mic button */}
               <button
                 type="button"
                 onClick={toggleListening}
-                title={listening ? 'Stop voice input' : 'Voice input (mic)'}
-                className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                title={listening ? 'Stop microphone' : 'Speak grievance (Microphone)'}
+                className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 transition-all ${
                   listening
-                    ? 'bg-red-500 border-red-500 text-white animate-pulse'
+                    ? 'bg-red-600 border-red-600 text-white shadow-md shadow-red-500/30 scale-105'
                     : hasSpeechAPI
-                      ? 'border-[#d6c4aa] bg-[#fbf8f2] text-stone-600 hover:bg-red-50 hover:border-red-300 hover:text-red-600'
+                      ? 'border-[#d6c4aa] bg-[#fbf8f2] text-stone-700 hover:bg-red-50 hover:border-red-300 hover:text-red-600'
                       : 'border-stone-200 text-stone-300 cursor-not-allowed'
                 }`}
               >
-                {listening ? <MicOff size={15} /> : <Mic size={15} />}
+                {listening ? <MicOff size={16} /> : <Mic size={16} />}
               </button>
               <button
                 onClick={() => sendMessage()}
-                disabled={sending || !input.replace('\u200B', '').trim()}
+                disabled={sending || !input.replace(/\u200B/g, '').trim()}
                 className="w-10 h-10 rounded-full bg-[#b85828] hover:bg-[#9c451a] disabled:opacity-40 text-white flex items-center justify-center shrink-0 shadow-md shadow-[#b85828]/25 transition-all"
               >
                 <Send size={15} />
               </button>
             </div>
-            {/* Voice error */}
+
+            {/* Voice error banner */}
             {voiceError && (
-              <p className="text-[10px] text-red-500 mt-1 pl-1">{voiceError}</p>
+              <div className="flex items-center justify-between text-xs text-red-700 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl mt-1.5">
+                <span>{voiceError}</span>
+                <button
+                  type="button"
+                  onClick={() => setVoiceError('')}
+                  className="text-red-400 hover:text-red-800 font-bold ml-2 text-sm"
+                >
+                  ✕
+                </button>
+              </div>
             )}
 
             {/* Inline location picker panel */}

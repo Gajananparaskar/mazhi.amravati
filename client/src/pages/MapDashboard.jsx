@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Map as MapIcon, Filter, X, Share2, ThumbsUp, ExternalLink,
-  MapPin, Loader2, RefreshCw,
+  Map as MapIcon, X, Share2, ThumbsUp, ExternalLink,
+  MapPin, Loader2,
   AlertTriangle, Droplets, Lightbulb, Trash2, Wind, FileText,
   LocateFixed, Target,
 } from 'lucide-react';
@@ -28,31 +28,30 @@ const AMRAVATI_BOUNDS = [
   [21.20, 78.10], // North-East corner
 ];
 
-// ── Map Styles (Street, Satellite, Clean Civic) ──────────────────────────────
+// ── Map Styles (100% Free, No API Key Required, No Watermark) ───────────────
 const TILE_LAYERS = {
-  positron: {
-    id: 'positron',
-    name: 'Clean Civic',
-    name_mr: 'स्वच्छ रस्ता नकाशा',
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; OpenStreetMap',
-    subdomains: 'abcd',
-    maxZoom: 20,
+  street: {
+    id: 'street',
+    name: 'Street View',
+    name_mr: 'रस्ता नकाशा',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
   },
   satellite: {
     id: 'satellite',
     name: 'Satellite',
     name_mr: 'उपग्रह दृश्य (Satellite)',
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+    attribution: 'Tiles &copy; Esri &mdash; Earthstar Geographics',
     maxZoom: 18,
   },
-  osm: {
-    id: 'osm',
-    name: 'Standard OSM',
-    name_mr: 'मानक रस्ते',
-    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  esriStreet: {
+    id: 'esriStreet',
+    name: 'Detailed Street',
+    name_mr: 'सविस्तर रस्ते',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri',
     maxZoom: 19,
   },
 };
@@ -205,7 +204,7 @@ function ClusteredMarkers({ complaints, onUpvote, upvoting, upvoteDone, tCategor
     }));
 
     const sc = new Supercluster({
-      radius: 60, // Cluster radius in pixels
+      radius: 80, // Cluster radius in pixels — cleaner grouping, avoids touching pins
       maxZoom: 16, // Maximum zoom level to cluster points
     });
     sc.load(points);
@@ -334,13 +333,12 @@ export default function MapDashboard() {
   const [error, setError] = useState('');
   const [catFilter, setCatFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [filterOpen, setFilterOpen] = useState(false);
   const [upvoting, setUpvoting] = useState({});
   const [upvoteDone, setUpvoteDone] = useState({});
   const [locating, setLocating] = useState(false);
   const [myCoords, setMyCoords] = useState(null);
   const [heatmapMode, setHeatmapMode] = useState(false);
-  const [mapTile, setMapTile] = useState('positron');
+  const [mapTile, setMapTile] = useState('street');
   const [selectedLandmark, setSelectedLandmark] = useState(null);
 
   useEffect(() => { document.title = 'Issue Map — Mazhi Amravati'; }, []);
@@ -428,36 +426,57 @@ export default function MapDashboard() {
       <Navbar />
 
       {/* Header bar */}
-      <div className="bg-[#fdfbf7] border-b border-[#ebdcc9] px-4 py-3 sticky top-16 z-30">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-[#fdfbf7] border-b border-[#ebdcc9] px-4 py-2.5 sticky top-16 z-30 shadow-2xs">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
           
-          {/* Title & badge */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-[#faeedd] text-[#b85828] border border-[#ebdcc9] flex items-center justify-center font-bold">
+          {/* Title & metrics badge */}
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-[#faeedd] text-[#b85828] border border-[#ebdcc9] flex items-center justify-center font-bold text-sm shrink-0">
               🗺️
             </div>
             <div>
-              <h1 className="font-extrabold text-stone-900 text-sm sm:text-base leading-tight">
-                {lang === 'mr' ? 'अमरावती नागरी समस्या थेट नकाशा' : lang === 'hi' ? 'अमरावती नागरिक समस्या लाइव मैप' : 'Amravati City Civic Issue Map'}
-              </h1>
-              <div className="text-[11px] text-stone-500 font-medium">
-                {lang === 'mr' ? 'क्लस्टर व्ह्यू: परिसरातील समस्या एकत्र दिसतील, झूम केल्यावर स्वतंत्र होतील' : 'Cluster view: Zoom in to expand neighborhood complaint clusters'}
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-extrabold text-stone-900 text-sm sm:text-base leading-tight">
+                  {lang === 'mr' ? 'अमरावती नागरी समस्या थेट नकाशा' : lang === 'hi' ? 'अमरावती नागरिक समस्या लाइव मैप' : 'Amravati City Civic Issue Map'}
+                </h1>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#faeedd] text-[#b85828] border border-[#ebdcc9]">
+                  {stats.total} {lang === 'mr' ? 'नोंदणीकृत' : 'Reported'} · {stats.resolved} {lang === 'mr' ? 'निराकरण' : 'Resolved'}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Controls */}
+          {/* Header Controls (Area Dropdown, Style Switcher, Location, Report) */}
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Quick Jump to Area Dropdown */}
+            <div className="relative">
+              <select
+                value={selectedLandmark?.id || ''}
+                onChange={(e) => {
+                  const lm = AMRAVATI_LANDMARKS.find((x) => x.id === e.target.value);
+                  if (lm) setSelectedLandmark({ ...lm, ts: Date.now() });
+                }}
+                className="text-xs font-bold bg-white border border-[#d6c4aa] hover:border-[#b85828] text-stone-800 rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#b85828] cursor-pointer shadow-2xs transition-colors"
+              >
+                <option value="">📍 {lang === 'mr' ? 'परिसर निवडा (Jump to Area)...' : 'Jump to Area...'}</option>
+                {AMRAVATI_LANDMARKS.map((lm) => (
+                  <option key={lm.id} value={lm.id}>
+                    {lang === 'mr' ? lm.name_mr : lm.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Map Style Switcher (Street / Satellite) */}
             <div className="flex items-center bg-stone-100 border border-[#d6c4aa] rounded-xl p-0.5">
               <button
-                onClick={() => setMapTile('positron')}
+                onClick={() => setMapTile('street')}
                 className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
-                  mapTile === 'positron'
+                  mapTile === 'street'
                     ? 'bg-white text-stone-900 shadow-2xs'
                     : 'text-stone-600 hover:text-stone-900'
                 }`}
-                title="Clean Civic Street View"
+                title="Street Map"
               >
                 🗺️ {lang === 'mr' ? 'रस्ता' : 'Street'}
               </button>
@@ -468,20 +487,9 @@ export default function MapDashboard() {
                     ? 'bg-stone-900 text-white shadow-2xs'
                     : 'text-stone-600 hover:text-stone-900'
                 }`}
-                title="High-Resolution Satellite View"
+                title="Satellite View"
               >
                 🛰️ {lang === 'mr' ? 'उपग्रह' : 'Satellite'}
-              </button>
-              <button
-                onClick={() => setMapTile('osm')}
-                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all hidden sm:inline-block ${
-                  mapTile === 'osm'
-                    ? 'bg-white text-stone-900 shadow-2xs'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-                title="OpenStreetMap Standard"
-              >
-                OSM
               </button>
             </div>
 
@@ -489,116 +497,36 @@ export default function MapDashboard() {
             <button
               onClick={locateMe}
               disabled={locating}
-              className="inline-flex items-center gap-1.5 text-xs bg-white border border-[#d6c4aa] hover:border-[#b85828] text-stone-700 font-bold px-3 py-1.5 rounded-xl shadow-xs transition-all hover:bg-[#faeedd]"
+              className="inline-flex items-center gap-1 text-xs bg-white border border-[#d6c4aa] hover:border-[#b85828] text-stone-700 font-bold px-2.5 py-1.5 rounded-xl shadow-2xs transition-all hover:bg-[#faeedd]"
+              title="Locate my position"
             >
               <LocateFixed size={13} className={locating ? 'animate-spin text-[#b85828]' : 'text-[#b85828]'} />
-              {locating ? (lang === 'mr' ? 'शोधत आहे…' : 'Locating…') : (lang === 'mr' ? 'माझे स्थान' : 'My Location')}
+              <span className="hidden sm:inline">{locating ? (lang === 'mr' ? 'शोधत आहे…' : 'Locating…') : (lang === 'mr' ? 'माझे स्थान' : 'My Location')}</span>
             </button>
 
             {/* Heatmap toggle */}
             <button
               onClick={() => setHeatmapMode((m) => !m)}
-              className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border transition-all ${
+              className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-xl border transition-all ${
                 heatmapMode
-                  ? 'bg-[#1a4b77] text-white border-[#1a4b77] shadow-xs'
+                  ? 'bg-[#1a4b77] text-white border-[#1a4b77] shadow-2xs'
                   : 'bg-white text-stone-700 border-[#d6c4aa] hover:bg-[#faeedd]'
               }`}
+              title="Toggle Heatmap Hotspots"
             >
-              <span>🔥</span> {lang === 'mr' ? 'हॉटस्पॉट' : 'Hotspots'}
-            </button>
-
-            {/* Filter Toggle */}
-            <button
-              onClick={() => setFilterOpen((v) => !v)}
-              className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border transition-all ${
-                activeFiltersCount > 0
-                  ? 'bg-[#b85828] text-white border-[#b85828]'
-                  : 'bg-white text-stone-700 border-[#d6c4aa] hover:bg-[#faeedd]'
-              }`}
-            >
-              <Filter size={13} />
-              {lang === 'mr' ? 'फिल्टर' : 'Filter'}
-              {activeFiltersCount > 0 && (
-                <span className="w-4 h-4 rounded-full bg-white text-[#b85828] text-[10px] font-black flex items-center justify-center">
-                  {activeFiltersCount}
-                </span>
-              )}
-            </button>
-
-            {/* Refresh */}
-            <button
-              onClick={fetchComplaints}
-              disabled={loading}
-              className="p-2 bg-white border border-[#d6c4aa] text-stone-600 rounded-xl hover:bg-[#faeedd] transition-all"
-              title="Refresh complaints"
-            >
-              <RefreshCw size={13} className={loading ? 'animate-spin text-[#b85828]' : ''} />
+              <span>🔥</span> <span className="hidden sm:inline">{lang === 'mr' ? 'हॉटस्पॉट' : 'Hotspots'}</span>
             </button>
 
             {/* Report New */}
             <Link
               to="/complaint"
-              className="inline-flex items-center gap-1.5 text-xs bg-[#b85828] hover:bg-[#9c451a] text-white font-extrabold px-3.5 py-1.5 rounded-xl shadow-xs transition-all"
+              className="inline-flex items-center gap-1 text-xs bg-[#b85828] hover:bg-[#9c451a] text-white font-extrabold px-3 py-1.5 rounded-xl shadow-xs transition-all"
             >
               + {lang === 'mr' ? 'तक्रार करा' : 'Report Issue'}
             </Link>
           </div>
 
         </div>
-      </div>
-
-      {/* Amravati Neighborhood Quick Jump Ribbon */}
-      <div className="bg-[#f7f2e7] border-b border-[#ebdcc9] px-4 py-2 overflow-x-auto scrollbar-none flex items-center gap-1.5 text-xs">
-        <span className="text-[10px] uppercase font-black text-stone-500 shrink-0 mr-1 flex items-center gap-1">
-          📍 {lang === 'mr' ? 'परिसर निवडा:' : 'Jump to Area:'}
-        </span>
-        {AMRAVATI_LANDMARKS.map((lm) => (
-          <button
-            key={lm.id}
-            onClick={() => setSelectedLandmark({ ...lm, ts: Date.now() })}
-            className="shrink-0 text-xs font-semibold px-3 py-1 rounded-full bg-white hover:bg-[#faeedd] border border-[#d6c4aa] text-stone-700 hover:text-[#b85828] shadow-2xs transition-all hover:scale-105 flex items-center gap-1"
-          >
-            <span>{lang === 'mr' ? lm.name_mr : lm.name}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Category Quick Filter Pills with Counts */}
-      <div className="bg-white border-b border-[#ebdcc9] px-4 py-2 overflow-x-auto scrollbar-none flex items-center gap-2 text-xs">
-        <button
-          onClick={() => setCatFilter('')}
-          className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${
-            !catFilter
-              ? 'bg-[#b85828] text-white border-[#b85828] shadow-xs'
-              : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
-          }`}
-        >
-          <span>{lang === 'mr' ? 'सर्व समस्या' : 'All Issues'}</span>
-          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${!catFilter ? 'bg-white/25 text-white' : 'bg-stone-200 text-stone-800'}`}>
-            {stats.total}
-          </span>
-        </button>
-        {Object.entries(CAT).map(([key, cfg]) => {
-          const count = catCounts[key] || 0;
-          const isSelected = catFilter === key;
-          return (
-            <button
-              key={key}
-              onClick={() => setCatFilter(isSelected ? '' : key)}
-              className={`shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${
-                isSelected
-                  ? 'bg-stone-900 text-white border-stone-900 shadow-xs'
-                  : 'bg-white text-stone-700 border-[#ebdcc9] hover:bg-[#faeedd]'
-              }`}
-            >
-              <span className="w-2.5 h-2.5 rounded-full" style={{ background: cfg.color }} />
-              <span>{catLabel(key)}</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${isSelected ? 'bg-white/20 text-white' : 'bg-[#faeedd] text-[#b85828]'}`}>
-                {count}
-              </span>
-            </button>
-          );
-        })}
       </div>
 
       {/* Error notification banner */}
@@ -608,88 +536,69 @@ export default function MapDashboard() {
         </div>
       )}
 
-      {/* Filter panel */}
-      {filterOpen && (
-        <div className="bg-[#fbf8f2] border-b border-[#ebdcc9] px-4 py-3 animate-in slide-in-from-top-2">
-          <div className="max-w-7xl mx-auto flex flex-wrap gap-4 items-center justify-between text-xs">
-            <div className="flex flex-wrap gap-4 items-center">
-              {/* Category */}
-              <div>
-                <label className="block text-[11px] font-bold text-stone-600 mb-1">
-                  {lang === 'mr' ? 'श्रेणी' : 'Category'}
-                </label>
-                <select
-                  value={catFilter}
-                  onChange={(e) => setCatFilter(e.target.value)}
-                  className="bg-white border border-[#d6c4aa] rounded-xl px-2.5 py-1 text-xs font-medium text-stone-800 focus:outline-none focus:border-[#b85828]"
+      {/* Single Unified Sub-Toolbar: Category Filter Chips + Status Selector */}
+      <div className="bg-white border-b border-[#ebdcc9] px-4 py-2">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
+          {/* Category Quick Filter Pills with counts */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+            <button
+              onClick={() => setCatFilter('')}
+              className={`shrink-0 text-xs font-bold px-3 py-1 rounded-full border transition-all flex items-center gap-1.5 ${
+                !catFilter
+                  ? 'bg-[#b85828] text-white border-[#b85828] shadow-2xs'
+                  : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
+              }`}
+            >
+              <span>{lang === 'mr' ? 'सर्व' : 'All'}</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${!catFilter ? 'bg-white/25 text-white' : 'bg-stone-200 text-stone-800'}`}>
+                {stats.total}
+              </span>
+            </button>
+            {Object.entries(CAT).map(([key, cfg]) => {
+              const count = catCounts[key] || 0;
+              const isSelected = catFilter === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setCatFilter(isSelected ? '' : key)}
+                  className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border transition-all flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-stone-900 text-white border-stone-900 shadow-2xs'
+                      : 'bg-white text-stone-700 border-[#ebdcc9] hover:bg-[#faeedd]'
+                  }`}
                 >
-                  <option value="">{lang === 'mr' ? 'सर्व श्रेणी' : 'All Categories'}</option>
-                  {Object.keys(CAT).map((k) => (
-                    <option key={k} value={k}>{catLabel(k)}</option>
-                  ))}
-                </select>
-              </div>
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: cfg.color }} />
+                  <span>{catLabel(key)}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${isSelected ? 'bg-white/20 text-white' : 'bg-[#faeedd] text-[#b85828]'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-              {/* Status */}
-              <div>
-                <label className="block text-[11px] font-bold text-stone-600 mb-1">
-                  {lang === 'mr' ? 'स्थिती' : 'Status'}
-                </label>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="bg-white border border-[#d6c4aa] rounded-xl px-2.5 py-1 text-xs font-medium text-stone-800 focus:outline-none focus:border-[#b85828]"
-                >
-                  <option value="">{lang === 'mr' ? 'सर्व स्थिती' : 'All Statuses'}</option>
-                  <option value="submitted">Submitted</option>
-                  <option value="assigned">Assigned</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="resolved">Resolved</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Clear filters */}
+          {/* Right Status Filter */}
+          <div className="flex items-center gap-2 shrink-0 ml-auto">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-[#fbf8f2] border border-[#d6c4aa] rounded-xl px-2.5 py-1 text-xs font-semibold text-stone-800 focus:outline-none focus:border-[#b85828]"
+            >
+              <option value="">{lang === 'mr' ? 'सर्व स्थिती (All Status)' : 'All Status'}</option>
+              <option value="submitted">Submitted</option>
+              <option value="assigned">Assigned</option>
+              <option value="in_progress">In Progress</option>
+              <option value="resolved">Resolved</option>
+            </select>
             {activeFiltersCount > 0 && (
               <button
                 onClick={() => { setCatFilter(''); setStatusFilter(''); }}
-                className="text-[11px] font-bold text-[#b85828] hover:underline flex items-center gap-1"
+                className="text-[11px] font-bold text-[#b85828] hover:underline flex items-center gap-1 bg-[#faeedd] px-2 py-1 rounded-lg"
               >
-                <X size={12} /> {lang === 'mr' ? 'फिल्टर हटवा' : 'Clear Filters'}
+                <X size={11} /> {lang === 'mr' ? 'हटवा' : 'Clear'}
               </button>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Legend & Stats Banner */}
-      <div className="bg-white border-b border-[#ebdcc9] px-4 py-2">
-        <div className="max-w-7xl mx-auto flex flex-wrap gap-4 items-center justify-between text-xs">
-          
-          {/* Category legend */}
-          <div className="flex flex-wrap gap-3 items-center">
-            <span className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">
-              {lang === 'mr' ? 'रंगसूची:' : 'Legend:'}
-            </span>
-            {Object.entries(CAT).map(([key, cfg]) => (
-              <div key={key} className="flex items-center gap-1 text-[11px] text-stone-700 font-medium">
-                <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: cfg.color }} />
-                {catLabel(key)}
-              </div>
-            ))}
-            <div className="flex items-center gap-1 text-[11px] text-stone-700 font-bold ml-2">
-              <span className="w-3 h-3 rounded-full inline-block bg-[#b85828] ring-2 ring-[#b85828]/30" />
-              <span>{lang === 'mr' ? 'क्लस्टर (एकत्र समस्या)' : 'Cluster Dot'}</span>
-            </div>
-          </div>
-
-          {/* Quick Metrics */}
-          <div className="flex items-center gap-3 text-[11px] font-bold text-stone-600">
-            <span>Total: <strong className="text-stone-900">{stats.total}</strong></span>
-            <span>Resolved: <strong className="text-emerald-700">{stats.resolved}</strong></span>
-            <span>In Progress: <strong className="text-amber-700">{stats.inProgress}</strong></span>
-          </div>
-
         </div>
       </div>
 
@@ -712,7 +621,7 @@ export default function MapDashboard() {
           maxBoundsViscosity={0.8}
           scrollWheelZoom
           preferCanvas={true}
-          style={{ height: 'calc(100vh - 270px)', minHeight: '480px', width: '100%' }}
+          style={{ height: 'calc(100vh - 175px)', minHeight: '540px', width: '100%' }}
         >
           <TileLayer
             key={mapTile}

@@ -9,6 +9,7 @@ import { useI18n } from '../i18n.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import api, { fileUrl } from '../api.js';
 import Navbar from '../components/Navbar.jsx';
+import Footer from '../components/Footer.jsx';
 import LocationPicker, { fetchDetailedAddress } from '../components/LocationPicker.jsx';
 import ComplaintReceipt from '../components/ComplaintReceipt.jsx';
 
@@ -801,20 +802,20 @@ export default function ChatComplaint() {
           </div>
         </div>
 
-        {/* ── Summary sidebar (Equal Height Matching Chatbox) ── */}
-        <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-[#ebdcc9] shadow-xl p-5 flex flex-col h-[75vh] min-h-[560px] overflow-hidden">
-          {/* Header */}
-          <div className="shrink-0 flex items-center justify-between pb-3 border-b border-[#ebdcc9]">
-            <h3 className="font-black text-stone-900 text-sm flex items-center gap-2">
-              <CheckCircle2 size={16} className="text-[#b85828]" /> {t('complaintSummary')}
-            </h3>
-            <span className="text-[10px] font-bold font-mono px-2.5 py-0.5 rounded-full bg-[#faeedd] border border-[#ebdcc9] text-[#b85828]">
-              {[Boolean(extracted.category), Boolean(locationData?.address || extracted.location_text), Boolean(extracted.description), Boolean(guestName || user?.name), Boolean(guestContact || user?.phone)].filter(Boolean).length}/5 Complete
-            </span>
-          </div>
+        {/* ── Summary sidebar ── */}
+        <div className="space-y-4">
+          <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-[#ebdcc9] shadow-xl p-5 sm:p-6 space-y-3">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-[#ebdcc9]">
+              <h3 className="font-black text-stone-900 text-sm flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-[#b85828]" /> {t('complaintSummary')}
+              </h3>
+              <span className="text-[10px] font-bold font-mono px-2.5 py-0.5 rounded-full bg-[#faeedd] border border-[#ebdcc9] text-[#b85828]">
+                {[Boolean(extracted.category), Boolean(locationData?.address || extracted.location_text), Boolean(extracted.description), Boolean(guestName || user?.name), Boolean(guestContact || user?.phone)].filter(Boolean).length}/5 Complete
+              </span>
+            </div>
 
-          {/* Scrollable Summary Body */}
-          <div className="flex-1 overflow-y-auto py-3 space-y-3 pr-1 text-sm">
+            {/* Rows */}
             <div className="space-y-2 text-sm">
               <SummaryRow
                 label={t('problemType')}
@@ -845,7 +846,7 @@ export default function ChatComplaint() {
             </div>
 
             {/* Citizen Details (Name & Contact Number) */}
-            <div className="mt-3 border-t border-[#ebdcc9] pt-3 space-y-2">
+            <div className="border-t border-[#ebdcc9] pt-3 space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-black text-stone-900 flex items-center gap-1.5">
                   <User size={13} className="text-[#b85828]" />
@@ -887,48 +888,49 @@ export default function ChatComplaint() {
             {/* Quick Map Link */}
             <Link
               to="/map"
-              className="mt-2 flex items-center gap-2.5 p-2.5 rounded-xl border border-[#ebdcc9] bg-[#fbf8f2] hover:bg-[#faeedd] text-xs font-bold text-stone-700 hover:text-[#b85828] transition-all"
+              className="flex items-center gap-2.5 p-2.5 rounded-xl border border-[#ebdcc9] bg-[#fbf8f2] hover:bg-[#faeedd] text-xs font-bold text-stone-700 hover:text-[#b85828] transition-all"
             >
               <MapIcon size={14} className="text-[#b85828] shrink-0" />
               <span className="truncate">{lang === 'mr' ? 'अमरावती समस्या नकाशा पहा' : lang === 'hi' ? 'समस्या मानचित्र देखें' : 'View Amravati Issue Map'}</span>
             </Link>
-          </div>
 
-          {/* Bottom Pinned Submit Area */}
-          <div className="shrink-0 pt-3 border-t border-[#ebdcc9]">
-            <button
-              onClick={checkAndSubmit}
-              disabled={!isReadyToSubmit || submitting || checkingNearby}
-              className={`w-full flex items-center justify-center gap-2 font-black py-3 rounded-2xl transition-all shadow-lg text-sm ${
-                isReadyToSubmit
-                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer'
-                  : 'bg-[#b85828] hover:bg-[#9c451a] disabled:opacity-40 text-white shadow-[#b85828]/25'
-              }`}
-            >
-              {(submitting || checkingNearby)
-                ? <Loader2 size={16} className="animate-spin" />
-                : <CheckCircle2 size={16} />
-              }
-              {checkingNearby
-                ? 'Checking nearby…'
-                : submitting
-                ? 'Submitting…'
-                : isReadyToSubmit
-                ? (lang === 'mr' ? 'तक्रार दाखल करा (Submit) ✓' : lang === 'hi' ? 'शिकायत दर्ज करें (Submit) ✓' : 'Submit Complaint ✓')
-                : t('submitComplaint')}
-            </button>
-            {isReadyToSubmit ? (
-              <p className="text-[11px] text-emerald-700 font-bold mt-1.5 text-center leading-tight">
-                ✓ {lang === 'mr' ? 'सर्व तपशील पूर्ण झाले आहेत. दाखल करण्यासाठी वरील बटण दाबा.' : 'All details ready. Click above to submit.'}
-              </p>
-            ) : (
-              <p className="text-[11px] text-stone-500 mt-1.5 text-center leading-tight font-medium">
-                {lang === 'mr' ? 'तपशील पूर्ण झाल्यावर हे बटण सक्रिय होईल.' : 'Unlocks once details are completed.'}
-              </p>
-            )}
+            {/* Submit button */}
+            <div className="pt-2">
+              <button
+                onClick={checkAndSubmit}
+                disabled={!isReadyToSubmit || submitting || checkingNearby}
+                className={`w-full flex items-center justify-center gap-2 font-black py-3.5 rounded-2xl transition-all shadow-lg text-sm ${
+                  isReadyToSubmit
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer'
+                    : 'bg-[#b85828] hover:bg-[#9c451a] disabled:opacity-40 text-white shadow-[#b85828]/25'
+                }`}
+              >
+                {(submitting || checkingNearby)
+                  ? <Loader2 size={16} className="animate-spin" />
+                  : <CheckCircle2 size={16} />
+                }
+                {checkingNearby
+                  ? 'Checking nearby…'
+                  : submitting
+                  ? 'Submitting…'
+                  : isReadyToSubmit
+                  ? (lang === 'mr' ? 'तक्रार दाखल करा (Submit) ✓' : lang === 'hi' ? 'शिकायत दर्ज करें (Submit) ✓' : 'Submit Complaint ✓')
+                  : t('submitComplaint')}
+              </button>
+              {isReadyToSubmit ? (
+                <p className="text-[11px] text-emerald-700 font-bold mt-2 text-center leading-tight">
+                  ✓ {lang === 'mr' ? 'सर्व तपशील पूर्ण झाले आहेत. दाखल करण्यासाठी वरील बटण दाबा.' : 'All details ready. Click above to submit.'}
+                </p>
+              ) : (
+                <p className="text-[11px] text-stone-500 mt-2 text-center leading-tight font-medium">
+                  {lang === 'mr' ? 'तपशील पूर्ण झाल्यावर हे बटण सक्रिय होईल.' : 'Unlocks once details are completed.'}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }

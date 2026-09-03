@@ -189,15 +189,12 @@ export default function ChatComplaint() {
   const toggleListening = useCallback(() => {
     const SR = SpeechRecognitionCtor.current;
     if (!SR) {
-      setVoiceError('Voice input is not supported in this browser. Please use Google Chrome or Microsoft Edge.');
+      setVoiceError('Voice input requires Google Chrome or Microsoft Edge.');
       return;
     }
 
-    // If already listening, stop cleanly
     if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (_) {}
+      try { recognitionRef.current.stop(); } catch (_) {}
       recognitionRef.current = null;
       setListening(false);
       return;
@@ -208,17 +205,11 @@ export default function ChatComplaint() {
 
     try {
       const rec = new SR();
-
-      // Dynamic speech recognition language matching selected UI language
-      const speechLangMap = {
-        mr: 'mr-IN',
-        hi: 'hi-IN',
-        en: 'en-IN',
-      };
+      const speechLangMap = { mr: 'mr-IN', hi: 'hi-IN', en: 'en-IN' };
       rec.lang = speechLangMap[lang] || 'en-IN';
       rec.interimResults = true;
       rec.maxAlternatives = 1;
-      rec.continuous = true; // Continuous listening so pauses don't cut off speech abruptly
+      rec.continuous = true;
 
       rec.onresult = (e) => {
         let transcript = '';
@@ -230,12 +221,8 @@ export default function ChatComplaint() {
       };
 
       rec.onerror = (e) => {
-        if (e.error === 'audio-capture') {
-          setVoiceError('Microphone not found or permission denied. Please allow mic access in your browser.');
-        } else if (e.error === 'not-allowed') {
-          setVoiceError('Microphone permission blocked. Please allow microphone access in your browser address bar.');
-        } else if (e.error !== 'no-speech') {
-          setVoiceError(`Voice input: ${e.error}`);
+        if (e.error === 'not-allowed') {
+          setVoiceError('Microphone permission blocked. Please allow mic access in your browser address bar.');
         }
         recognitionRef.current = null;
         setListening(false);
@@ -250,8 +237,7 @@ export default function ChatComplaint() {
       rec.start();
       setListening(true);
     } catch (err) {
-      console.warn('Speech recognition start error:', err);
-      setVoiceError('Could not start microphone. Please check browser microphone permissions.');
+      console.warn('Speech error:', err);
       setListening(false);
     }
   }, [lang, input]);
@@ -349,6 +335,11 @@ export default function ChatComplaint() {
   };
 
   const sendMessage = async (text) => {
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch (_) {}
+      recognitionRef.current = null;
+      setListening(false);
+    }
     const outgoing = text ?? input;
     if (!outgoing.trim() || sending) return;
     setError('');
@@ -690,32 +681,6 @@ export default function ChatComplaint() {
               </button>
             </div>
 
-            {/* Active Voice Listening Banner */}
-            {listening && (
-              <div className="flex items-center justify-between bg-red-50 border border-red-200 px-3.5 py-2 rounded-2xl mb-2 text-xs shadow-2xs animate-in fade-in slide-in-from-bottom-1">
-                <div className="flex items-center gap-2.5 text-red-700 font-bold">
-                  <span className="relative flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
-                  </span>
-                  <span>
-                    {lang === 'mr'
-                      ? '🎙️ माईक सुरू आहे — स्पष्ट बोला (मराठी / हिंदी / इंग्रजी)...'
-                      : lang === 'hi'
-                      ? '🎙️ माइक चालू है — स्पष्ट बोलिए (हिंदी / मराठी / अंग्रेजी)...'
-                      : '🎙️ Microphone active — Speak clearly in Marathi, Hindi or English...'}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={toggleListening}
-                  className="text-[11px] font-black bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-xl shadow-2xs transition-all flex items-center gap-1"
-                >
-                  {lang === 'mr' ? 'पूर्ण झाले ✓' : 'Done ✓'}
-                </button>
-              </div>
-            )}
-
             {/* Main input row */}
             <div className="flex items-center gap-2">
               <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleFiles} />
@@ -731,21 +696,21 @@ export default function ChatComplaint() {
                 value={input.replace(/\u200B/g, '')}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                placeholder={listening ? (lang === 'mr' ? '🎤 ऐकत आहे... बोला' : '🎤 Listening… speak now') : t('typeMessage')}
+                placeholder={listening ? (lang === 'mr' ? '🎤 ऐकत आहे... (मराठी/हिंदी/English बोला)' : lang === 'hi' ? '🎤 सुन रहा हूँ... बोलिए' : '🎤 Listening… speak now') : t('typeMessage')}
                 className={`flex-1 bg-[#fbf8f2] border rounded-full px-4 py-2.5 text-sm text-stone-900 placeholder-stone-400 focus:bg-white focus:outline-none transition-all ${
-                  listening ? 'border-red-500 ring-2 ring-red-200 bg-red-50/30' : 'border-[#d6c4aa] focus:border-[#b85828] focus:ring-2 focus:ring-[#b85828]/15'
+                  listening ? 'border-[#b85828] ring-2 ring-[#b85828]/25 bg-amber-50/20' : 'border-[#d6c4aa] focus:border-[#b85828] focus:ring-2 focus:ring-[#b85828]/15'
                 }`}
               />
               {/* Mic button */}
               <button
                 type="button"
                 onClick={toggleListening}
-                title={listening ? 'Stop microphone' : 'Speak grievance (Microphone)'}
+                title={listening ? 'Stop microphone' : 'Voice input (Microphone)'}
                 className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 transition-all ${
                   listening
-                    ? 'bg-red-600 border-red-600 text-white shadow-md shadow-red-500/30 scale-105'
+                    ? 'bg-[#b85828] border-[#b85828] text-white shadow-md shadow-[#b85828]/35 animate-pulse scale-105'
                     : hasSpeechAPI
-                      ? 'border-[#d6c4aa] bg-[#fbf8f2] text-stone-700 hover:bg-red-50 hover:border-red-300 hover:text-red-600'
+                      ? 'border-[#d6c4aa] bg-[#fbf8f2] text-stone-700 hover:bg-[#faeedd] hover:border-[#b85828] hover:text-[#b85828]'
                       : 'border-stone-200 text-stone-300 cursor-not-allowed'
                 }`}
               >
@@ -760,18 +725,18 @@ export default function ChatComplaint() {
               </button>
             </div>
 
-            {/* Voice error banner */}
+            {/* Voice error text */}
             {voiceError && (
-              <div className="flex items-center justify-between text-xs text-red-700 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl mt-1.5">
+              <p className="text-[11px] text-red-600 mt-1 pl-2 flex items-center justify-between">
                 <span>{voiceError}</span>
                 <button
                   type="button"
                   onClick={() => setVoiceError('')}
-                  className="text-red-400 hover:text-red-800 font-bold ml-2 text-sm"
+                  className="text-stone-400 hover:text-stone-700 font-bold ml-2 text-xs"
                 >
                   ✕
                 </button>
-              </div>
+              </p>
             )}
 
             {/* Inline location picker panel */}

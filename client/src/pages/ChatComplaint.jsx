@@ -310,7 +310,7 @@ export default function ChatComplaint() {
 
     typewriterRef.current = setInterval(() => {
       index += 3; // Stream 3 chars per 12ms for smooth fast typing
-      if (index < fullText.length) {
+      if (index <= fullText.length) {
         const partial = fullText.slice(0, index);
         setMessages((prev) => {
           const next = [...prev];
@@ -334,47 +334,15 @@ export default function ChatComplaint() {
     }, 12);
   };
 
-  const sendMessage = async (text, isInstantChip = false) => {
+  const sendMessage = async (text) => {
     const outgoing = text ?? input;
     if (!outgoing.trim() || sending) return;
     setError('');
     const priorMessages = messages;
     setMessages((m) => [...m, { role: 'user', text: outgoing }]);
     setInput('');
-
-    // Instant local heuristic extraction for 0ms UI update
-    const lower = outgoing.toLowerCase();
-    let optCat = null;
-    if (lower.includes('street') || lower.includes('light') || lower.includes('दिवा') || lower.includes('लाईट') || lower.includes('लाइट')) optCat = 'street_light';
-    else if (lower.includes('pothole') || lower.includes('road') || lower.includes('खड्डा') || lower.includes('रस्ता') || lower.includes('सड़क') || lower.includes('गड्ढा')) optCat = 'roads_potholes';
-    else if (lower.includes('garbage') || lower.includes('waste') || lower.includes('trash') || lower.includes('कचरा') || lower.includes('घाण')) optCat = 'garbage_waste';
-    else if (lower.includes('water') || lower.includes('pipe') || lower.includes('पाणी') || lower.includes('नल') || lower.includes('जल')) optCat = 'water_supply';
-    else if (lower.includes('drain') || lower.includes('sewer') || lower.includes('गटार') || lower.includes('नाली')) optCat = 'drainage_sewer';
-
-    // ── Instant 0ms chip handling for category clicks ──
-    if (isInstantChip && optCat && !extracted.category) {
-      setExtracted((prev) => ({
-        ...prev,
-        category: optCat,
-        description: prev.description || outgoing,
-      }));
-      const instantPrompt = lang === 'mr'
-        ? 'समजले. अमरावतीमध्ये हा प्रश्न कोणत्या भागात किंवा लँडमार्कजवळ (उदा. राजकमल चौक, गाडगे नगर, बडनेरा रोड) आहे?'
-        : lang === 'hi'
-        ? 'समझ गया। अमरावती में यह समस्या किस क्षेत्र या लैंडमार्क के पास है?'
-        : 'Got it! Which area or landmark in Amravati is this located (e.g. Rajkamal Chowk, Gadge Nagar, Badnera Road)?';
-      
-      streamAssistantReply(instantPrompt);
-      // Fire background sync silently without blocking UI
-      api.post('/chatbot/message', {
-        message: outgoing,
-        history: priorMessages.map((m) => ({ role: m.role, text: m.text })),
-        language: lang,
-      }).catch(() => {});
-      return;
-    }
-
     setSending(true);
+
     try {
       const { data } = await api.post('/chatbot/message', {
         message: outgoing,
@@ -422,252 +390,32 @@ export default function ChatComplaint() {
     }
   };
 
-  const DYNAMIC_QUICK_OPTIONS = {
-    // Level 1: Initial Category selection
-    initial: {
-      en: [
-        { label: '💡 Streetlight not working', text: 'Streetlight is not working' },
-        { label: '🕳️ Pothole on road', text: 'There is a big pothole on the road' },
-        { label: '🗑️ Garbage collection', text: 'Garbage has not been collected and is piling up' },
-        { label: '🚰 Water supply issue', text: 'There is a water supply and pipeline issue' },
-        { label: '🌊 Drainage overflow', text: 'Drainage and sewage is overflowing' },
-        { label: '⚠️ Other civic problem', text: 'I want to report another civic problem' },
-      ],
-      mr: [
-        { label: '💡 स्ट्रीट लाईट बंद आहे', text: 'रस्त्यावरील स्ट्रीट लाईट बंद आहे' },
-        { label: '🕳️ रस्त्यावर खड्डा आहे', text: 'रस्त्यावर मोठा खड्डा पडला आहे' },
-        { label: '🗑️ कचरा साचला आहे', text: 'कचरा उचलला नसून दुर्गंधी पसरली आहे' },
-        { label: '🚰 पाणीपुरवठा समस्या', text: 'पाणीपुरवठ्यात अडचण असून गळती आहे' },
-        { label: '🌊 गटार ओव्हरफ्लो', text: 'गटाराचे घाण पाणी रस्त्यावर वाहत आहे' },
-        { label: '⚠️ इतर नागरी समस्या', text: 'मला इतर नागरी समस्येची तक्रार करायची आहे' },
-      ],
-      hi: [
-        { label: '💡 स्ट्रीट लाइट खराब है', text: 'सड़क की स्ट्रीट लाइट बंद पड़ी है' },
-        { label: '🕳️ सड़क पर गड्ढा है', text: 'सड़क पर बड़ा और गहरा गड्ढा है' },
-        { label: '🗑️ कचरे का ढेर लगा है', text: 'कचरा नहीं उठाया गया है और बदबू आ रही है' },
-        { label: '🚰 पानी सप्लाई समस्या', text: 'पानी की सप्लाई बंद है और पाइपलाइन लीकेज है' },
-        { label: '🌊 नाली ओवरफ्लो', text: 'नाली का गंदा पानी सड़क पर बह रहा है' },
-        { label: '⚠️ अन्य नागरिक समस्या', text: 'मुझे अन्य नागरिक समस्या की शिकायत करनी है' },
-      ],
-    },
-
-    // Level 2: Specific details & landmark locations per category
-    street_light: {
-      en: [
-        { label: '📍 Send My Current Location', isGPS: true },
-        { label: '📍 Rajkamal Chowk', text: 'Location is near Rajkamal Chowk' },
-        { label: '📍 Gadge Nagar', text: 'Location is at Gadge Nagar' },
-        { label: '📍 Badnera Road', text: 'Location is on Badnera Road' },
-        { label: '📍 Camp Area', text: 'Location is in Camp Area' },
-        { label: '📍 Panchavati Square', text: 'Location is near Panchavati Square' },
-        { label: '📍 Irwin Hospital Chowk', text: 'Location is near Irwin Square' },
-        { label: '⚡ Wire Broken / Dangling', text: 'The streetlight wire is broken and dangling dangerously' },
-        { label: '🌑 Entire street dark', text: 'The entire street is dark since 3 days' },
-      ],
-      mr: [
-        { label: '📍 माझे चालू स्थान पाठवा', isGPS: true },
-        { label: '📍 राजकमल चौक', text: 'ठिकाण: राजकमल चौक जवळ' },
-        { label: '📍 गाडगे नगर', text: 'ठिकाण: गाडगे नगर' },
-        { label: '📍 बडनेरा रोड', text: 'ठिकाण: बडनेरा रोड' },
-        { label: '📍 कॅम्प परिसर', text: 'ठिकाण: कॅम्प परिसर' },
-        { label: '📍 पंचवटी चौक', text: 'ठिकाण: पंचवटी चौक जवळ' },
-        { label: '📍 इर्विन चौक', text: 'ठिकाण: इर्विन हॉस्पिटल चौक जवळ' },
-        { label: '⚡ वायर तुटली आहे', text: 'स्ट्रीट लाईटची वायर तुटून लटकत आहे' },
-        { label: '🌑 संपूर्ण रस्त्यावर अंधार', text: 'गेल्या ३ दिवसांपासून पूर्ण रस्त्यावर अंधार आहे' },
-      ],
-      hi: [
-        { label: '📍 मेरा लाइव स्थान भेजें', isGPS: true },
-        { label: '📍 राजकमल चौक', text: 'स्थान: राजकमल चौक के पास' },
-        { label: '📍 गाडगे नगर', text: 'स्थान: गाडगे नगर' },
-        { label: '📍 बडनेरा रोड', text: 'स्थान: बडनेरा रोड' },
-        { label: '📍 कैंप एरिया', text: 'स्थान: कैंप एरिया' },
-        { label: '📍 पंचवटी चौक', text: 'स्थान: पंचवटी चौक के पास' },
-        { label: '📍 इरविन चौक', text: 'स्थान: इरविन हॉस्पिटल चौक' },
-        { label: '⚡ तार टूटा हुआ है', text: 'स्ट्रीट लाइट का तार टूटकर लटक रहा है' },
-        { label: '🌑 पूरी सड़क पर अंधेरा', text: 'पिछले 3 दिनों से पूरी सड़क पर अंधेरा है' },
-      ],
-    },
-
-    roads_potholes: {
-      en: [
-        { label: '📍 Send My Current Location', isGPS: true },
-        { label: '📍 Badnera Road', text: 'Location is on Badnera Road' },
-        { label: '📍 Rajkamal Chowk', text: 'Location is near Rajkamal Chowk' },
-        { label: '📍 Panchavati Square', text: 'Location is at Panchavati Square' },
-        { label: '📍 Irwin Square', text: 'Location is near Irwin Square' },
-        { label: '📍 Rukmini Nagar', text: 'Location is in Rukmini Nagar' },
-        { label: '🕳️ Deep dangerous pothole', text: 'It is a deep dangerous pothole causing bike accidents' },
-        { label: '💧 Water filled in hole', text: 'Pothole is filled with stagnant water and invisible at night' },
-      ],
-      mr: [
-        { label: '📍 माझे चालू स्थान पाठवा', isGPS: true },
-        { label: '📍 बडनेरा रोड', text: 'ठिकाण: बडनेरा रोड' },
-        { label: '📍 राजकमल चौक', text: 'ठिकाण: राजकमल चौक जवळ' },
-        { label: '📍 पंचवटी चौक', text: 'ठिकाण: पंचवटी चौक' },
-        { label: '📍 इर्विन चौक', text: 'ठिकाण: इर्विन चौक जवळ' },
-        { label: '📍 रुक्मिणी नगर', text: 'ठिकाण: रुक्मिणी नगर' },
-        { label: '🕳️ मोठा धोकादायक खड्डा', text: 'खूप खोल आणि धोकादायक खड्डा असून अपघात होत आहेत' },
-        { label: '💧 खड्ड्यात पाणी साचले', text: 'खड्ड्यात पाणी साचले असून रात्री दिसत नाही' },
-      ],
-      hi: [
-        { label: '📍 मेरा लाइव स्थान भेजें', isGPS: true },
-        { label: '📍 बडनेरा रोड', text: 'स्थान: बडनेरा रोड' },
-        { label: '📍 राजकमल चौक', text: 'स्थान: राजकमल चौक के पास' },
-        { label: '📍 पंचवटी चौक', text: 'स्थान: पंचवटी चौक' },
-        { label: '📍 इरविन चौक', text: 'स्थान: इरविन चौक' },
-        { label: '📍 रुक्मिणी नगर', text: 'स्थान: रुक्मिणी नगर' },
-        { label: '🕳️ गहरा खतरनाक गड्ढा', text: 'काफी गहरा गड्ढा है जिससे दुर्घटनाएं हो रही हैं' },
-        { label: '💧 गड्ढे में पानी भरा है', text: 'गड्ढे में पानी भरा है और रात में दिखाई नहीं देता' },
-      ],
-    },
-
-    garbage_waste: {
-      en: [
-        { label: '📍 Send My Current Location', isGPS: true },
-        { label: '📍 Sabji Mandi / Market', text: 'Location is near Sabji Mandi Market' },
-        { label: '📍 Camp Area', text: 'Location is in Camp Area' },
-        { label: '📍 Gadge Nagar', text: 'Location is in Gadge Nagar' },
-        { label: '📍 Near Bus Stand', text: 'Location is near Central Bus Stand' },
-        { label: '🗑️ Not collected for 3 days', text: 'Garbage has not been collected for over 3 days' },
-        { label: '🤢 Heavy foul smell', text: 'Overflowing garbage is causing heavy foul smell and health hazard' },
-      ],
-      mr: [
-        { label: '📍 माझे चालू स्थान पाठवा', isGPS: true },
-        { label: '📍 भाजी मंडई जवळ', text: 'ठिकाण: भाजी मंडई परिसर' },
-        { label: '📍 कॅम्प परिसर', text: 'ठिकाण: कॅम्प परिसर' },
-        { label: '📍 गाडगे नगर', text: 'ठिकाण: गाडगे नगर' },
-        { label: '📍 बस स्टँड जवळ', text: 'ठिकाण: मध्यवर्ती बस स्टँड जवळ' },
-        { label: '🗑️ ३ दिवसांपासून कचरा नाही', text: 'गेल्या ३ दिवसांपासून कचरा उचलला नाही' },
-        { label: '🤢 तीव्र दुर्गंधी व डास', text: 'कचऱ्यामुळे तीव्र दुर्गंधी पसरली असून आजार पसरण्याची भीती आहे' },
-      ],
-      hi: [
-        { label: '📍 मेरा लाइव स्थान भेजें', isGPS: true },
-        { label: '📍 सब्जी मंडी के पास', text: 'स्थान: सब्जी मंडी के पास' },
-        { label: '📍 कैंप एरिया', text: 'स्थान: कैंप एरिया' },
-        { label: '📍 गाडगे नगर', text: 'स्थान: गाडगे नगर' },
-        { label: '📍 बस स्टैंड के पास', text: 'स्थान: बस स्टैंड के पास' },
-        { label: '🗑️ 3 दिन से कचरा नहीं उठा', text: '3 दिनों से कचरा नहीं उठाया गया है' },
-        { label: '🤢 भारी दुर्गंध व मक्खियां', text: 'कचरा सड़ रहा है और भारी बदबू आ रही है' },
-      ],
-    },
-
-    water_supply: {
-      en: [
-        { label: '📍 Send My Current Location', isGPS: true },
-        { label: '📍 Rukmini Nagar', text: 'Location is in Rukmini Nagar' },
-        { label: '📍 Rajkamal Chowk', text: 'Location is in Rajkamal area' },
-        { label: '📍 Gadge Nagar', text: 'Location is in Gadge Nagar' },
-        { label: '📍 Camp Area', text: 'Location is in Camp Area' },
-        { label: '🚰 Main pipeline burst', text: 'Main water pipeline has burst on the road' },
-        { label: '🚱 No water for 2 days', text: 'There has been no municipal water supply for 2 days' },
-        { label: '🧪 Dirty / muddy water', text: 'Supplied water is muddy and contaminated' },
-      ],
-      mr: [
-        { label: '📍 माझे चालू स्थान पाठवा', isGPS: true },
-        { label: '📍 रुक्मिणी नगर', text: 'ठिकाण: रुक्मिणी नगर' },
-        { label: '📍 राजकमल चौक', text: 'ठिकाण: राजकमल चौक परिसर' },
-        { label: '📍 गाडगे नगर', text: 'ठिकाण: गाडगे नगर' },
-        { label: '📍 कॅम्प परिसर', text: 'ठिकाण: कॅम्प परिसर' },
-        { label: '🚰 मुख्य पाईपलाईन फुटली', text: 'रस्त्यावरील मुख्य पाण्याची पाईपलाईन फुटून पाणी वाया जात आहे' },
-        { label: '🚱 २ दिवसांपासून पाणी नाही', text: 'गेल्या २ दिवसांपासून नळाला अजिबात पाणी आले नाही' },
-        { label: '🧪 गढूळ / अस्वच्छ पाणी', text: 'नळाला अत्यंत गढूळ आणि पिण्यास अयोग्य पाणी येत आहे' },
-      ],
-      hi: [
-        { label: '📍 मेरा लाइव स्थान भेजें', isGPS: true },
-        { label: '📍 रुक्मिणी नगर', text: 'स्थान: रुक्मिणी नगर' },
-        { label: '📍 राजकमल चौक', text: 'स्थान: राजकमल चौक' },
-        { label: '📍 गाडगे नगर', text: 'स्थान: गाडगे नगर' },
-        { label: '📍 कैंप एरिया', text: 'स्थान: कैंप एरिया' },
-        { label: '🚰 पाइपलाइन टूट गई है', text: 'मुख्य पानी की पाइपलाइन टूट गई है और पानी बह रहा है' },
-        { label: '🚱 2 दिन से पानी नहीं आया', text: '2 दिनों से पानी की कोई सप्लाई नहीं आई है' },
-        { label: '🧪 गंदा व बदबूदार पानी', text: 'सप्लाई में गंदा और बदबूदार पानी आ रहा है' },
-      ],
-    },
-
-    drainage_sewer: {
-      en: [
-        { label: '📍 Send My Current Location', isGPS: true },
-        { label: '📍 Badnera Road', text: 'Location is on Badnera Road' },
-        { label: '📍 Gadge Nagar', text: 'Location is in Gadge Nagar' },
-        { label: '📍 Rukmini Nagar', text: 'Location is in Rukmini Nagar' },
-        { label: '🌊 Drain overflowing on road', text: 'Drainage line is blocked and overflowing onto the street' },
-        { label: '🕳️ Open / broken manhole', text: 'Manhole cover is broken and open, very hazardous' },
-        { label: '🦟 Mosquito breeding', text: 'Stagnant sewage water is breeding mosquitoes' },
-      ],
-      mr: [
-        { label: '📍 माझे चालू स्थान पाठवा', isGPS: true },
-        { label: '📍 बडनेरा रोड', text: 'ठिकाण: बडनेरा रोड' },
-        { label: '📍 गाडगे नगर', text: 'ठिकाण: गाडगे नगर' },
-        { label: '📍 रुक्मिणी नगर', text: 'ठिकाण: रुक्मिणी नगर' },
-        { label: '🌊 गटार तुंबून रस्त्यावर', text: 'गटार तुंबल्यामुळे घाण पाणी रस्त्यावर वाहत आहे' },
-        { label: '🕳️ मॅनहोलचे झाकण तुटले', text: 'गटाराचे झाकण तुटलेले आणि उघडे आहे, धोकादायक आहे' },
-        { label: '🦟 डासांचा प्रादुर्भाव', text: 'घाण पाण्यामुळे डास आणि साथीचे रोग पसरत आहेत' },
-      ],
-      hi: [
-        { label: '📍 मेरा लाइव स्थान भेजें', isGPS: true },
-        { label: '📍 बडनेरा रोड', text: 'स्थान: बडनेरा रोड' },
-        { label: '📍 गाडगे नगर', text: 'स्थान: गाडगे नगर' },
-        { label: '📍 रुक्मिणी नगर', text: 'स्थान: रुक्मिणी नगर' },
-        { label: '🌊 नाली का पानी सड़क पर', text: 'नाली जाम हो गई है और गंदा पानी सड़क पर भर गया है' },
-        { label: '🕳️ मैनहोल का ढक्कन खुला है', text: 'मैनहोल का ढक्कन टूटा हुआ और खुला है' },
-        { label: '🦟 मच्छरों का आतंक', text: 'गंदे पानी से मच्छर और बीमारियां फैल रही हैं' },
-      ],
-    },
-
-    // Level 3: When details + location are present
-    finalizing: {
-      en: [
-        { label: '⏱️ Since 2 days', text: 'This problem is persisting since 2 days' },
-        { label: '⏱️ Since 1 week', text: 'This issue is there for over 1 week' },
-        { label: '🚨 Urgent safety hazard', text: 'Please treat this as high urgency due to safety hazard' },
-        { label: '🚗 Causing traffic jam', text: 'This is blocking traffic and causing congestion' },
-        { label: '✅ All details provided', text: 'All details are accurate. Please proceed with the complaint' },
-      ],
-      mr: [
-        { label: '⏱️ २ दिवसांपासून', text: 'ही समस्या गेल्या २ दिवसांपासून सुरू आहे' },
-        { label: '⏱️ १ आठवड्यापासून', text: 'ही समस्या १ आठवड्यापेक्षा जास्त काळापासून आहे' },
-        { label: '🚨 अतितातडीने दुरुस्ती करा', text: 'सुरक्षेच्या दृष्टीने कृपया यावर तातडीने कारवाई करावी' },
-        { label: '🚗 वाहतूक कोंडी होत आहे', text: 'या समस्येमुळे रस्त्यावर वाहतूक कोंडी होत आहे' },
-        { label: '✅ सर्व माहिती दिली आहे', text: 'सर्व माहिती बरोबर असून कृपया तक्रार दाखल करावी' },
-      ],
-      hi: [
-        { label: '⏱️ 2 दिनों से', text: 'यह समस्या पिछले 2 दिनों से बनी हुई है' },
-        { label: '⏱️ 1 हफ्ते से', text: 'यह समस्या 1 हफ्ते से ज्यादा समय से है' },
-        { label: '🚨 तत्काल समाधान चाहिए', text: 'कृपया सुरक्षा को देखते हुए तुरंत समाधान करें' },
-        { label: '🚗 ट्रैफिक जाम लग रहा है', text: 'इससे ट्रैफिक जाम और परेशानी हो रही है' },
-        { label: '✅ पूरी जानकारी दे दी है', text: 'कृपया शिकायत दर्ज करने की प्रक्रिया आगे बढ़ाएं' },
-      ],
-    },
+  const QUICK_TOPICS = {
+    en: [
+      { label: '💡 Street Light', text: 'Streetlight is not working' },
+      { label: '🕳️ Roads / Potholes', text: 'There is a pothole on the road' },
+      { label: '🗑️ Garbage Waste', text: 'Garbage has not been collected' },
+      { label: '🚰 Water Supply', text: 'Water supply pipeline problem' },
+      { label: '🌊 Drainage / Sewer', text: 'Drainage is overflowing' },
+      { label: '⚠️ Other Problem', text: 'I want to report a civic issue' },
+    ],
+    mr: [
+      { label: '💡 स्ट्रीट लाईट', text: 'रस्त्यावरील स्ट्रीट लाईट बंद आहे' },
+      { label: '🕳️ रस्त्यावर खड्डा', text: 'रस्त्यावर खड्डा पडला आहे' },
+      { label: '🗑️ कचरा साचला आहे', text: 'कचरा उचलला नाही' },
+      { label: '🚰 पाणीपुरवठा', text: 'पाणीपुरवठ्यात अडचण आहे' },
+      { label: '🌊 गटार ओव्हरफ्लो', text: 'गटाराचे घाण पाणी वाहत आहे' },
+      { label: '⚠️ इतर समस्या', text: 'मला नागरी समस्येची तक्रार करायची आहे' },
+    ],
+    hi: [
+      { label: '💡 स्ट्रीट लाइट', text: 'सड़क की स्ट्रीट लाइट बंद है' },
+      { label: '🕳️ सड़क पर गड्ढा', text: 'सड़क पर गड्ढा है' },
+      { label: '🗑️ कचरे का ढेर', text: 'कचरा नहीं उठाया गया है' },
+      { label: '🚰 पानी सप्लाई', text: 'पानी की सप्लाई में समस्या है' },
+      { label: '🌊 नाली ओवरफ्लो', text: 'नाली का गंदा पानी बह रहा है' },
+      { label: '⚠️ अन्य समस्या', text: 'मुझे नागरिक समस्या की शिकायत करनी है' },
+    ],
   };
-
-  const getDynamicQuickChips = () => {
-    const cat = extracted.category;
-    const currentLang = DYNAMIC_QUICK_OPTIONS.initial[lang] ? lang : 'en';
-
-    if (cat && extracted.location_text) {
-      return {
-        stage: 'details',
-        title: lang === 'mr' ? 'अतिरिक्त तपशील / कालावधी:' : lang === 'hi' ? 'अतिरिक्त विवरण / अवधि:' : 'Add Details / Duration:',
-        options: DYNAMIC_QUICK_OPTIONS.finalizing[currentLang],
-      };
-    }
-
-    if (cat && DYNAMIC_QUICK_OPTIONS[cat]) {
-      return {
-        stage: 'specifics',
-        title: lang === 'mr' ? 'ठिकाण किंवा तपशील निवडा:' : lang === 'hi' ? 'स्थान या विवरण चुनें:' : 'Select Location or Details:',
-        options: DYNAMIC_QUICK_OPTIONS[cat][currentLang],
-      };
-    }
-
-    return {
-      stage: 'initial',
-      title: lang === 'mr' ? 'समस्येचा प्रकार निवडा:' : lang === 'hi' ? 'समस्या का प्रकार चुनें:' : 'Quick Select Problem:',
-      options: DYNAMIC_QUICK_OPTIONS.initial[currentLang],
-    };
-  };
-
-  const activeChips = getDynamicQuickChips();
 
   const removePhoto = (p) => setPhotos((ph) => ph.filter((x) => x !== p));
 
@@ -897,46 +645,20 @@ export default function ChatComplaint() {
 
           {/* Input bar */}
           <div className="border-t border-[#ebdcc9] px-4 pt-2.5 pb-2 bg-white">
-            {/* Context-aware dynamic quick suggestions */}
+            {/* Quick problem selection chips — normal, clean, and never change into "select location or details" */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 mb-1.5 scrollbar-none">
               <span className="text-[10px] text-[#b85828] bg-[#faeedd] px-2.5 py-0.5 rounded-full uppercase font-extrabold tracking-wider shrink-0 mr-1 border border-[#ebdcc9] flex items-center gap-1">
-                {activeChips.title}
+                {lang === 'mr' ? 'समस्या निवडा:' : lang === 'hi' ? 'समस्या चुनें:' : 'Quick Select:'}
               </span>
-              {activeChips.stage !== 'initial' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setExtracted((prev) => ({ ...prev, category: null, location_text: null }));
-                  }}
-                  title="Show all main categories"
-                  className="shrink-0 text-xs px-2.5 py-1 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold transition-colors flex items-center gap-1 border border-stone-200"
-                >
-                  ↺ {lang === 'mr' ? 'सर्व प्रकार' : lang === 'hi' ? 'सभी प्रकार' : 'All Issues'}
-                </button>
-              )}
-              {activeChips.options.map((opt, idx) => (
+              {(QUICK_TOPICS[lang] || QUICK_TOPICS.en).map((topic, idx) => (
                 <button
                   key={idx}
                   type="button"
-                  onClick={() => {
-                    if (opt.isGPS) {
-                      sendCurrentLocation();
-                    } else {
-                      sendMessage(opt.text, true);
-                    }
-                  }}
-                  disabled={sending || locatingCurrent}
-                  className={`shrink-0 text-xs px-3 py-1 rounded-full border transition-all ${
-                    opt.isGPS
-                      ? 'bg-amber-100 border border-amber-300 text-amber-950 font-black shadow-xs hover:bg-amber-200'
-                      : activeChips.stage === 'specifics'
-                      ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 font-semibold'
-                      : activeChips.stage === 'details'
-                      ? 'bg-emerald-50 border-emerald-300 text-emerald-900 hover:bg-emerald-100 font-semibold'
-                      : 'bg-white border-[#ebdcc9] hover:border-[#b85828] hover:bg-[#faeedd] text-stone-700 hover:text-[#b85828] shadow-2xs font-medium'
-                  }`}
+                  onClick={() => sendMessage(topic.text)}
+                  disabled={sending}
+                  className="shrink-0 text-xs px-3 py-1 rounded-full border border-[#ebdcc9] bg-[#fbf8f2] hover:border-[#b85828] hover:bg-[#faeedd] text-stone-700 hover:text-[#b85828] shadow-2xs font-medium transition-all"
                 >
-                  {opt.label}
+                  {topic.label}
                 </button>
               ))}
             </div>

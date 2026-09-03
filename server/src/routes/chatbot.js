@@ -67,6 +67,96 @@ IMPORTANT: Output must be a single valid JSON object with NO markdown code fence
 Output format: {"reply":"...","category":null,"description":null,"location_text":null,"latitude":null,"longitude":null,"duration_or_details":null,"summary":null,"ready_to_submit":false}`;
 }
 
+const AMRAVATI_LOCATIONS = [
+  { name: 'Rajkamal Chowk', keywords: ['rajkamal', 'राजकमल'], lat: 20.932, lng: 77.752 },
+  { name: 'Badnera Road', keywords: ['badnera', 'बडनेरा'], lat: 20.871, lng: 77.745 },
+  { name: 'Gadge Nagar', keywords: ['gadge nagar', 'गाडगे नगर', 'गाडगेनार'], lat: 20.952, lng: 77.765 },
+  { name: 'Camp Area', keywords: ['camp', 'कॅम्प', 'कँप'], lat: 20.936, lng: 77.742 },
+  { name: 'Panchavati Square', keywords: ['panchavati', 'पंचवटी'], lat: 20.941, lng: 77.768 },
+  { name: 'Irwin Hospital Chowk', keywords: ['irwin', 'इर्विन', 'इरविन'], lat: 20.935, lng: 77.756 },
+  { name: 'Rukmini Nagar', keywords: ['rukmini', 'रुक्मिणी'], lat: 20.927, lng: 77.762 },
+  { name: 'Dastur Nagar', keywords: ['dastur', 'दस्तुर'], lat: 20.918, lng: 77.781 },
+  { name: 'Sai Nagar', keywords: ['sai nagar', 'साई नगर'], lat: 20.912, lng: 77.769 },
+  { name: 'Tapadia City', keywords: ['tapadia', 'तपाडिया'], lat: 20.946, lng: 77.773 },
+  { name: 'Moshi', keywords: ['moshi', 'मोशी'], lat: 20.948, lng: 77.770 },
+  { name: 'Navsari', keywords: ['navsari', 'नवसारी'], lat: 20.960, lng: 77.775 },
+];
+
+function detectCivicIntent(message, history = [], language = 'en') {
+  const fullContext = (history.map((h) => h.text).join(' ') + ' ' + message).toLowerCase();
+  const current = message.toLowerCase();
+
+  // 1. Detect Category
+  let category = null;
+  if (/street|light|दिवा|लाईट|लाइट|विद्युत|पोल|pole|bulb|अंधार|dark/i.test(fullContext)) category = 'street_light';
+  else if (/pothole|road|खड्डा|खड्डे|रस्ता|सड़क|गड्ढा|डामर|पोटहोल/i.test(fullContext)) category = 'roads_potholes';
+  else if (/garbage|waste|trash|कचरा|घाण|डस्टबिन|गंदगी|कचराकुंडी|दुर्गंधी/i.test(fullContext)) category = 'garbage_waste';
+  else if (/water|pipe|pipeline|पाणी|नल|जल|गळती|सप्लाय|लीक/i.test(fullContext)) category = 'water_supply';
+  else if (/drain|sewer|gutter|गटार|नाली|ड्रेनेज|सांडपाणी/i.test(fullContext)) category = 'drainage_sewer';
+
+  // 2. Detect Location in full text or current message
+  let matchedLoc = null;
+  for (const loc of AMRAVATI_LOCATIONS) {
+    if (loc.keywords.some((k) => fullContext.includes(k))) {
+      matchedLoc = loc;
+      break;
+    }
+  }
+
+  let locationText = matchedLoc ? matchedLoc.name : null;
+  if (!locationText) {
+    const locMatch = current.match(/(?:at|near|in|on|जवळ|येथे|पर|में)\s+([A-Za-z0-9\u0900-\u097F\s]{3,30})/i);
+    if (locMatch) locationText = locMatch[1].trim();
+  }
+
+  // If category detected and NO location yet -> ask for location naturally
+  if (category && !locationText) {
+    const askLocReply = language === 'mr'
+      ? 'माहिती दिल्याबद्दल धन्यवाद. ही समस्या अमरावतीमध्ये नक्की कोणत्या भागात किंवा रस्त्यावर आहे?'
+      : language === 'hi'
+      ? 'जानकारी देने के लिए धन्यवाद। यह समस्या अमरावती में किस क्षेत्र या सड़क पर है?'
+      : 'Thank you for reporting this issue. Could you please specify the road, area, or landmark in Amravati where it is located?';
+    
+    return {
+      reply: askLocReply,
+      category,
+      description: message,
+      location_text: null,
+      latitude: null,
+      longitude: null,
+      duration_or_details: null,
+      summary: null,
+      ready_to_submit: false,
+    };
+  }
+
+  // If BOTH category and location are detected -> ready to submit!
+  if (category && locationText) {
+    const readyReply = language === 'mr'
+      ? 'माहिती दिल्याबद्दल धन्यवाद. आपल्या तक्रारीचा सारांश तयार झाला आहे. कृपया बाजूला दिलेला सारांश तपासून \'तक्रार दाखल करा\' या बटणावर क्लिक करा.'
+      : language === 'hi'
+      ? 'विवरण देने के लिए धन्यवाद। आपकी शिकायत का सारांश तैयार हो गया है। कृपया सारांश की जांच करें और \'शिकायत दर्ज करें\' बटन पर क्लिक करें।'
+      : 'Thank you for the details. The summary of your complaint has been generated. Please review it in the summary panel and click \'Submit Grievance\' to officially file it.';
+
+    const catNiceName = category.replace('_', ' ');
+    const summary = `Citizen reported ${catNiceName} issue at ${locationText}, Amravati for prompt municipal redressal.`;
+
+    return {
+      reply: readyReply,
+      category,
+      description: history.length > 0 ? history[0].text : message,
+      location_text: locationText,
+      latitude: matchedLoc ? matchedLoc.lat : 20.935,
+      longitude: matchedLoc ? matchedLoc.lng : 77.755,
+      duration_or_details: 'Urgent municipal action requested',
+      summary,
+      ready_to_submit: true,
+    };
+  }
+
+  return null;
+}
+
 // POST /api/chatbot/message
 // body: { message: string, history: [{role:'user'|'assistant', text:string}], language: 'en'|'mr'|'hi' }
 router.post('/message', authOptional, async (req, res) => {
@@ -74,6 +164,13 @@ router.post('/message', authOptional, async (req, res) => {
   if (!message || typeof message !== 'string') {
     return res.status(400).json({ error: 'message is required' });
   }
+
+  // 1. Check fast-path civic intent engine (instant sub-10ms response)
+  const fastResult = detectCivicIntent(message, history, language);
+  if (fastResult) {
+    return res.json(fastResult);
+  }
+
   if (rawKeys.length === 0) {
     return res.status(503).json({
       error: 'AI assistant is not configured. Set GEMINI_API_KEYS in server/.env',

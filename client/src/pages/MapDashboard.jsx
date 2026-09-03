@@ -749,33 +749,12 @@ function ComplaintPopup({ c, onUpvote, upvoting, upvoteDone, tCategory, lang }) 
             <span className="text-[9px] text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-md font-bold">100% Resolved</span>
           </div>
           {photos[0] && c.resolution_photo ? (
-            <div className="space-y-2">
-              <BeforeAfterSlider
-                beforeSrc={photos[0]}
-                afterSrc={c.resolution_photo}
-                beforeLabel={lang === 'mr' ? 'आधी (Reported)' : 'Before (Reported)'}
-                afterLabel={lang === 'mr' ? 'नंतर (Resolved)' : 'After (Resolved)'}
-                height="h-40"
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <a href={fileUrl(photos[0])} target="_blank" rel="noreferrer" className="group block text-center">
-                  <div className="relative rounded-xl overflow-hidden border border-amber-300 shadow-2xs">
-                    <img src={fileUrl(photos[0])} alt="Before" className="w-full h-16 object-cover group-hover:scale-105 transition-transform" />
-                    <span className="absolute top-1 left-1 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
-                      {lang === 'mr' ? 'आधी' : 'Before'}
-                    </span>
-                  </div>
-                </a>
-                <a href={fileUrl(c.resolution_photo)} target="_blank" rel="noreferrer" className="group block text-center">
-                  <div className="relative rounded-xl overflow-hidden border border-emerald-400 shadow-2xs ring-1 ring-emerald-400">
-                    <img src={fileUrl(c.resolution_photo)} alt="After" className="w-full h-16 object-cover group-hover:scale-105 transition-transform" />
-                    <span className="absolute top-1 left-1 bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
-                      {lang === 'mr' ? 'नंतर ✓' : 'After ✓'}
-                    </span>
-                  </div>
-                </a>
-              </div>
-            </div>
+            <BeforeAfterSlider
+              beforeSrc={photos[0]}
+              afterSrc={c.resolution_photo}
+              showLabels={false}
+              height="h-44"
+            />
           ) : (
             <div className="grid grid-cols-2 gap-1.5">
               {photos[0] ? (

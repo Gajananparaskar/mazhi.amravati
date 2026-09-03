@@ -9,6 +9,7 @@ export default function BeforeAfterSlider({
   afterLabel = 'After (Resolved)',
   height = 'h-64 sm:h-72',
   className = '',
+  showLabels = true,
 }) {
   const [sliderPos, setSliderPos] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
@@ -104,24 +105,28 @@ export default function BeforeAfterSlider({
         </div>
       </div>
 
-      {/* 4. Labels & Badges */}
-      <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
-        <span className="text-[10px] font-extrabold bg-slate-950/80 backdrop-blur-md text-amber-300 border border-amber-400/40 px-2.5 py-1 rounded-full shadow-md uppercase tracking-wider">
-          {beforeLabel}
-        </span>
-      </div>
+      {/* 4. Labels & Badges (Optional) */}
+      {showLabels && (
+        <>
+          <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
+            <span className="text-[10px] font-extrabold bg-slate-950/80 backdrop-blur-md text-amber-300 border border-amber-400/40 px-2.5 py-1 rounded-full shadow-md uppercase tracking-wider">
+              {beforeLabel}
+            </span>
+          </div>
 
-      <div className="absolute top-2.5 right-2.5 z-10 pointer-events-none">
-        <span className="text-[10px] font-extrabold bg-emerald-950/85 backdrop-blur-md text-emerald-300 border border-emerald-400/40 px-2.5 py-1 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1">
-          <Sparkles size={11} className="text-emerald-400" /> {afterLabel}
-        </span>
-      </div>
+          <div className="absolute top-2.5 right-2.5 z-10 pointer-events-none">
+            <span className="text-[10px] font-extrabold bg-emerald-950/85 backdrop-blur-md text-emerald-300 border border-emerald-400/40 px-2.5 py-1 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1">
+              <Sparkles size={11} className="text-emerald-400" /> {afterLabel}
+            </span>
+          </div>
 
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-        <span className="text-[9px] font-bold bg-black/75 text-white/90 px-3 py-1 rounded-full backdrop-blur-sm shadow-xs">
-          ↔ Drag to Compare Before & After
-        </span>
-      </div>
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="text-[9px] font-bold bg-black/75 text-white/90 px-3 py-1 rounded-full backdrop-blur-sm shadow-xs">
+              ↔ Drag to Compare Before & After
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 }

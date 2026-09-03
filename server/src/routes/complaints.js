@@ -13,7 +13,7 @@ const router = express.Router();
 async function syncComplaintToSupabase(data) {
   if (!supabase) return;
   try {
-    const { error } = await supabase.from('complaints').insert([
+    const { error } = await supabase.from('complaints').upsert([
       {
         public_id: data.public_id,
         guest_name: data.guest_name,
@@ -31,9 +31,9 @@ async function syncComplaintToSupabase(data) {
         status: data.status || 'submitted',
         chat_transcript: data.chat_transcript || [],
       },
-    ]);
+    ], { onConflict: 'public_id' });
     if (error) {
-      console.warn('⚠️ Supabase complaint insert warning:', error.message);
+      console.warn('⚠️ Supabase complaint sync warning:', error.message);
     } else {
       console.log(`✅ Complaint ${data.public_id} successfully saved to Supabase PostgreSQL!`);
     }

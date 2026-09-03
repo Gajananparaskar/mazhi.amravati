@@ -43,11 +43,34 @@ const CATEGORY_KEYS = [
 
 const LANG_NAMES = { en: 'English', mr: 'Marathi (मराठी)', hi: 'Hindi (हिंदी)' };
 
-function buildSystemPrompt(language) {
+function buildSystemPrompt(language, currentExtracted = {}) {
   const langName = LANG_NAMES[language] || 'English';
+  const gathered = [];
+  if (currentExtracted.category) gathered.push(`- Category: ${currentExtracted.category}`);
+  if (currentExtracted.location_text) gathered.push(`- Location: ${currentExtracted.location_text}`);
+  if (currentExtracted.description) gathered.push(`- Description: ${currentExtracted.description}`);
+  if (currentExtracted.duration_or_details) gathered.push(`- Details: ${currentExtracted.duration_or_details}`);
+
+  const hasCore = Boolean(currentExtracted.category && currentExtracted.location_text && currentExtracted.description);
+
   return `You are Takrar Sahayak, a helpful municipal grievance assistant for Amravati Municipal Corporation. Reply ONLY in ${langName} in a natural, polite, and fluent conversational tone (NEVER mix English words in parentheses inside Marathi or Hindi text).
-Gather: category (one of: ${CATEGORY_KEYS.join('|')}), description, location_text, duration_or_details. Ask ONE clear question at a time.
-latitude/longitude: only if citizen names a known Amravati area (lat 20.92-20.96, lng 77.74-77.82), else null.
+
+ALREADY GATHERED DETAILS SO FAR:
+${gathered.length > 0 ? gathered.join('\n') : 'None yet.'}
+
+${hasCore ? `
+CRITICAL INSTRUCTION - ALL CORE DETAILS ARE ALREADY GATHERED:
+The citizen has already provided Category, Location, and Description.
+- NEVER tell the citizen that they haven't provided details or category!
+- If the citizen says "file", "submit", "sagal dil ahe", "all given", "done", "ok", "तक्रार दाखल करा", "सगळं दिलं", or asks to proceed:
+  1. Set ready_to_submit: true
+  2. Write a concise English summary in the "summary" field.
+  3. In "reply": Politely confirm in ${langName} that all details are recorded and ready, and tell them to click the Submit Grievance button (or that their complaint is being submitted).
+` : `
+Gather: category (one of: ${CATEGORY_KEYS.join('|')}), description, location_text, duration_or_details.
+DO NOT re-ask for any field that is ALREADY GATHERED above. Ask only for what is still missing.
+Ask ONE clear question at a time.
+`}
 
 CRITICAL INSTRUCTION WHEN ALL DETAILS (category + description + location_text) ARE GATHERED:
 1. Set ready_to_submit: true
@@ -64,13 +87,13 @@ Natural reply examples:
 - If English: "Thank you for the details. The summary of your complaint has been generated. Please review the details in the summary panel and click on 'Submit Grievance' to officially submit your complaint."
 
 IMPORTANT: Output must be a single valid JSON object with NO markdown code fences.
-Output format: {"reply":"...","category":null,"description":null,"location_text":null,"latitude":null,"longitude":null,"duration_or_details":null,"summary":null,"ready_to_submit":false}`;
+Output format: {"reply":"...","category":${currentExtracted.category ? JSON.stringify(currentExtracted.category) : 'null'},"description":${currentExtracted.description ? JSON.stringify(currentExtracted.description) : 'null'},"location_text":${currentExtracted.location_text ? JSON.stringify(currentExtracted.location_text) : 'null'},"latitude":null,"longitude":null,"duration_or_details":null,"summary":null,"ready_to_submit":${hasCore ? 'true' : 'false'}}`;
 }
 
 // POST /api/chatbot/message
-// body: { message: string, history: [{role:'user'|'assistant', text:string}], language: 'en'|'mr'|'hi' }
+// body: { message: string, history: [{role:'user'|'assistant', text:string}], language: 'en'|'mr'|'hi', currentExtracted?: object }
 router.post('/message', authOptional, async (req, res) => {
-  const { message, history = [], language = 'en' } = req.body || {};
+  const { message, history = [], language = 'en', currentExtracted = {} } = req.body || {};
   if (!message || typeof message !== 'string') {
     return res.status(400).json({ error: 'message is required' });
   }
@@ -118,7 +141,7 @@ router.post('/message', authOptional, async (req, res) => {
         model: GEMINI_MODEL,
         contents,
         config: {
-          systemInstruction: buildSystemPrompt(language),
+          systemInstruction: buildSystemPrompt(language, currentExtracted),
           responseMimeType: 'application/json',
           maxOutputTokens: 350,
           temperature: 0.0,
@@ -171,6 +194,16 @@ router.post('/message', authOptional, async (req, res) => {
             parsed.location_text = message.replace(/\s*\(?(?:GPS|gps)[:\s]+[0-9.]+[,\s]+[0-9.]+\)?/i, '').trim();
           }
         }
+      }
+
+      // Preserve already captured fields if parsed didn't re-extract them
+      if (currentExtracted.category && !parsed.category) parsed.category = currentExtracted.category;
+      if (currentExtracted.location_text && !parsed.location_text) parsed.location_text = currentExtracted.location_text;
+      if (currentExtracted.description && !parsed.description) parsed.description = currentExtracted.description;
+      if (currentExtracted.duration_or_details && !parsed.duration_or_details) parsed.duration_or_details = currentExtracted.duration_or_details;
+
+      if (parsed.category && parsed.location_text && parsed.description) {
+        parsed.ready_to_submit = true;
       }
 
       // If ready_to_submit is true, ensure reply does not falsely claim the issue is already submitted/resolved and clearly guides the user to click the Submit button

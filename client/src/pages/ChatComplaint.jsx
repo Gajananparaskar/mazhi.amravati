@@ -331,6 +331,79 @@ export default function ChatComplaint() {
     }, 12);
   };
 
+  const submitComplaint = async () => {
+    setShowSimilarModal(false);
+    setBypassSimilar(true);
+    setSubmitting(true);
+    setError('');
+    try {
+      const { data } = await api.post('/complaints', {
+        category:    extracted.category,
+        description: [extracted.description, extracted.duration_or_details].filter(Boolean).join('. '),
+        summary:     extracted.summary,
+        language:    lang,
+        location_text: locationData?.address || extracted.location_text,
+        latitude:    locationData?.lat  ?? extracted.latitude,
+        longitude:   locationData?.lng  ?? extracted.longitude,
+        photos,
+        chat_transcript: messages,
+        guest_name:    guestName.trim() || user?.name || 'Citizen',
+        guest_contact: guestContact.trim() || user?.phone || undefined,
+      });
+      setSubmitted(data.complaint);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not submit complaint. Please check the details and try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUpvoteNearby = async (c) => {
+    if (upvoteDone[c.id]) return;
+    setUpvoting((u) => ({ ...u, [c.id]: true }));
+    try {
+      const { data } = await api.post(`/complaints/${c.id}/upvote`);
+      setNearbyIssues((prev) => prev.map((x) => x.id === c.id ? { ...x, upvote_count: data.upvote_count } : x));
+      setUpvoteDone((d) => ({ ...d, [c.id]: true }));
+    } catch (err) {
+      if (err.response?.status === 409) setUpvoteDone((d) => ({ ...d, [c.id]: true }));
+    } finally {
+      setUpvoting((u) => ({ ...u, [c.id]: false }));
+    }
+  };
+
+  // ── Similar issue check → then submit ──────────────────────────────────────
+  const checkAndSubmit = async () => {
+    if (bypassSimilar) { submitComplaint(); return; }
+
+    const lat  = locationData?.lat  ?? extracted.latitude;
+    const lng  = locationData?.lng  ?? extracted.longitude;
+    const cat  = extracted.category;
+
+    // If no coords, skip proximity check and go straight to submit
+    if (!lat || !lng) { submitComplaint(); return; }
+
+    setCheckingNearby(true);
+    try {
+      const params = { lat, lng, radius: 100 };
+      if (cat) params.category = cat;
+      const { data } = await api.get('/complaints/nearby', { params });
+      if (data.nearby?.length > 0) {
+        setNearbyIssues(data.nearby);
+        setShowSimilarModal(true);
+        setCheckingNearby(false);
+        return;
+      }
+    } catch { /* non-critical, proceed anyway */ }
+    setCheckingNearby(false);
+    submitComplaint();
+  };
+
+  const isReadyToSubmit = Boolean(
+    extracted.ready_to_submit ||
+    (extracted.category && (extracted.location_text || locationData?.address) && extracted.description)
+  );
+
   const sendMessage = async (text) => {
     if (recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch (_) {}
@@ -340,29 +413,71 @@ export default function ChatComplaint() {
     const outgoing = text ?? input;
     if (!outgoing.trim() || sending) return;
     setError('');
+
+    const lower = outgoing.trim().toLowerCase();
+    const isFileIntent = /^(file|submit|done|ok|yes|sagal dil|sagal dil ahe|sagal dila|all given|dil ahe|daakhal|nondva|तक्रार|दाखल|नोंदवा|सगळं दिलं|सगळ दिल|पूर्ण)/i.test(lower);
+    const hasCore = Boolean(
+      extracted.category &&
+      (extracted.location_text || locationData?.address) &&
+      extracted.description
+    );
+
+    // If citizen says "file" / "sagal dil ahe" and info is ready, directly proceed to submission!
+    if (isFileIntent && (hasCore || isReadyToSubmit)) {
+      setMessages((m) => [
+        ...m,
+        { role: 'user', text: outgoing },
+        {
+          role: 'assistant',
+          text: lang === 'mr'
+            ? 'आपल्या तक्रारीचे सर्व तपशील प्राप्त झाले आहेत. मी आपली तक्रार दाखल करत आहे...'
+            : lang === 'hi'
+            ? 'आपकी शिकायत के सभी विवरण प्राप्त हो गए हैं। शिकायत दर्ज की जा रही है...'
+            : 'All grievance details captured. Submitting your complaint now...'
+        }
+      ]);
+      setInput('');
+      setExtracted((prev) => ({ ...prev, ready_to_submit: true }));
+      setTimeout(() => {
+        checkAndSubmit();
+      }, 300);
+      return;
+    }
+
     const priorMessages = messages;
     setMessages((m) => [...m, { role: 'user', text: outgoing }]);
     setInput('');
     setSending(true);
 
     try {
+      const currentLoc = locationData?.address || extracted.location_text;
       const { data } = await api.post('/chatbot/message', {
         message: outgoing,
         history: priorMessages.map((m) => ({ role: m.role, text: m.text })),
         language: lang,
+        currentExtracted: {
+          ...extracted,
+          location_text: currentLoc,
+        },
       });
       setSending(false);
       streamAssistantReply(data.reply);
-      setExtracted((prev) => ({
-        category:            data.category            ?? prev.category,
-        description:         data.description         ?? prev.description,
-        location_text:       data.location_text       ?? prev.location_text,
-        latitude:            data.latitude            ?? prev.latitude,
-        longitude:           data.longitude           ?? prev.longitude,
-        duration_or_details: data.duration_or_details ?? prev.duration_or_details,
-        summary:             data.summary             ?? prev.summary,
-        ready_to_submit:     !!data.ready_to_submit,
-      }));
+      setExtracted((prev) => {
+        const nextCat = data.category ?? prev.category;
+        const nextDesc = data.description ?? prev.description;
+        const nextLoc = data.location_text ?? prev.location_text ?? locationData?.address;
+        const coreReady = Boolean(nextCat && nextLoc && nextDesc);
+        return {
+          category:            nextCat,
+          description:         nextDesc,
+          location_text:       nextLoc,
+          latitude:            data.latitude            ?? prev.latitude,
+          longitude:           data.longitude           ?? prev.longitude,
+          duration_or_details: data.duration_or_details ?? prev.duration_or_details,
+          summary:             data.summary             ?? prev.summary,
+          ready_to_submit:     coreReady || !!data.ready_to_submit || prev.ready_to_submit,
+        };
+      });
     } catch (err) {
       setSending(false);
       setError(err.response?.data?.error || 'The AI assistant is unavailable right now.');
@@ -412,74 +527,6 @@ export default function ChatComplaint() {
     setNearbyIssues([]);
     setBypassSimilar(false);
     setUpvoteDone({});
-  };
-
-  // ── Similar issue check → then submit ──────────────────────────────────────
-  const checkAndSubmit = async () => {
-    if (bypassSimilar) { submitComplaint(); return; }
-
-    const lat  = locationData?.lat  ?? extracted.latitude;
-    const lng  = locationData?.lng  ?? extracted.longitude;
-    const cat  = extracted.category;
-
-    // If no coords, skip proximity check and go straight to submit
-    if (!lat || !lng) { submitComplaint(); return; }
-
-    setCheckingNearby(true);
-    try {
-      const params = { lat, lng, radius: 100 };
-      if (cat) params.category = cat;
-      const { data } = await api.get('/complaints/nearby', { params });
-      if (data.nearby?.length > 0) {
-        setNearbyIssues(data.nearby);
-        setShowSimilarModal(true);
-        setCheckingNearby(false);
-        return;
-      }
-    } catch { /* non-critical, proceed anyway */ }
-    setCheckingNearby(false);
-    submitComplaint();
-  };
-
-  const handleUpvoteNearby = async (c) => {
-    if (upvoteDone[c.id]) return;
-    setUpvoting((u) => ({ ...u, [c.id]: true }));
-    try {
-      const { data } = await api.post(`/complaints/${c.id}/upvote`);
-      setNearbyIssues((prev) => prev.map((x) => x.id === c.id ? { ...x, upvote_count: data.upvote_count } : x));
-      setUpvoteDone((d) => ({ ...d, [c.id]: true }));
-    } catch (err) {
-      if (err.response?.status === 409) setUpvoteDone((d) => ({ ...d, [c.id]: true }));
-    } finally {
-      setUpvoting((u) => ({ ...u, [c.id]: false }));
-    }
-  };
-
-  const submitComplaint = async () => {
-    setShowSimilarModal(false);
-    setBypassSimilar(true);
-    setSubmitting(true);
-    setError('');
-    try {
-      const { data } = await api.post('/complaints', {
-        category:    extracted.category,
-        description: [extracted.description, extracted.duration_or_details].filter(Boolean).join('. '),
-        summary:     extracted.summary,
-        language:    lang,
-        location_text: locationData?.address || extracted.location_text,
-        latitude:    locationData?.lat  ?? extracted.latitude,
-        longitude:   locationData?.lng  ?? extracted.longitude,
-        photos,
-        chat_transcript: messages,
-        guest_name:    guestName.trim() || user?.name || 'Citizen',
-        guest_contact: guestContact.trim() || user?.phone || undefined,
-      });
-      setSubmitted(data.complaint);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Could not submit complaint. Please check the details and try again.');
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   // ── Success screen ──────────────────────────────────────────────────────────
@@ -581,6 +628,27 @@ export default function ChatComplaint() {
                 </div>
               </div>
             ))}
+            {isReadyToSubmit && (
+              <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-2xl flex items-center justify-between shadow-xs">
+                <div className="pr-2">
+                  <div className="text-xs font-black text-emerald-900 flex items-center gap-1.5">
+                    <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+                    <span>{lang === 'mr' ? 'सर्व माहिती तयार आहे! तक्रार नोंदवा:' : lang === 'hi' ? 'सभी विवरण तैयार हैं! शिकायत दर्ज करें:' : 'Details Ready! File your grievance:'}</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-700 mt-0.5 font-medium">
+                    {lang === 'mr' ? 'तक्रार अधिकृतपणे महानगरपालिकेकडे दाखल करण्यासाठी येथे क्लिक करा.' : 'Click to officially submit your complaint to AMC.'}
+                  </p>
+                </div>
+                <button
+                  onClick={checkAndSubmit}
+                  disabled={submitting || checkingNearby}
+                  className="text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl shadow-xs transition-all flex items-center gap-1.5 shrink-0"
+                >
+                  {(submitting || checkingNearby) ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                  <span>{lang === 'mr' ? 'तक्रार दाखल करा ✓' : 'Submit Now ✓'}</span>
+                </button>
+              </div>
+            )}
             {sending && (
               <div className="flex justify-start">
                 <div className="w-8 h-8 rounded-2xl bg-[#faeedd] border border-[#ebdcc9] text-[#b85828] flex items-center justify-center shrink-0 mr-2.5 mt-0.5 shadow-2xs">
@@ -625,26 +693,6 @@ export default function ChatComplaint() {
               <div className="flex items-center gap-2 px-3 py-1.5 mb-2 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-900 animate-pulse font-medium">
                 <Loader2 size={12} className="animate-spin text-amber-700" />
                 <span>🤖 AI Vision is analyzing your uploaded photo (detecting category & details)...</span>
-              </div>
-            )}
-
-            {/* Gemini-Style Voice Waveform Listening Active Indicator */}
-            {listening && (
-              <div className="flex items-center justify-between px-4 py-2 mb-2 rounded-xl bg-gradient-to-r from-red-50 via-amber-50 to-red-50 border border-red-200 text-xs text-red-800 shadow-sm animate-pulse">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1">
-                    <span className="w-1 h-3.5 bg-red-500 rounded-full animate-bounce [animation-delay:0ms]" />
-                    <span className="w-1 h-5 bg-amber-500 rounded-full animate-bounce [animation-delay:150ms]" />
-                    <span className="w-1 h-3 bg-red-600 rounded-full animate-bounce [animation-delay:300ms]" />
-                    <span className="w-1 h-4 bg-saffron-500 rounded-full animate-bounce [animation-delay:200ms]" />
-                  </div>
-                  <span className="font-bold">
-                    {lang === 'mr' ? '🎙️ मराठीत ऐकत आहे... बोला' : lang === 'hi' ? '🎙️ हिंदी में सुन रहा हूँ... बोलिए' : '🎙️ Listening in English... speak now'}
-                  </span>
-                </div>
-                <button type="button" onClick={toggleListening} className="text-[11px] font-bold text-red-700 bg-white px-2 py-0.5 rounded-md border border-red-300 hover:bg-red-50 shadow-xs">
-                  Done / Stop
-                </button>
               </div>
             )}
 
@@ -875,16 +923,30 @@ export default function ChatComplaint() {
             {/* Submit button */}
             <button
               onClick={checkAndSubmit}
-              disabled={!extracted.ready_to_submit || submitting || checkingNearby}
-              className="mt-5 w-full flex items-center justify-center gap-2 bg-[#b85828] hover:bg-[#9c451a] disabled:opacity-40 text-white font-black py-3.5 rounded-2xl transition-all shadow-lg shadow-[#b85828]/25 text-sm"
+              disabled={!isReadyToSubmit || submitting || checkingNearby}
+              className={`mt-5 w-full flex items-center justify-center gap-2 font-black py-3.5 rounded-2xl transition-all shadow-lg text-sm ${
+                isReadyToSubmit
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer'
+                  : 'bg-[#b85828] hover:bg-[#9c451a] disabled:opacity-40 text-white shadow-[#b85828]/25'
+              }`}
             >
               {(submitting || checkingNearby)
                 ? <Loader2 size={16} className="animate-spin" />
                 : <CheckCircle2 size={16} />
               }
-              {checkingNearby ? 'Checking nearby…' : submitting ? 'Submitting…' : t('submitComplaint')}
+              {checkingNearby
+                ? 'Checking nearby…'
+                : submitting
+                ? 'Submitting…'
+                : isReadyToSubmit
+                ? (lang === 'mr' ? 'तक्रार दाखल करा (Submit) ✓' : lang === 'hi' ? 'शिकायत दर्ज करें (Submit) ✓' : 'Submit Grievance ✓')
+                : t('submitComplaint')}
             </button>
-            {!extracted.ready_to_submit && (
+            {isReadyToSubmit ? (
+              <p className="text-[11px] text-emerald-700 font-bold mt-2.5 text-center leading-relaxed">
+                ✓ {lang === 'mr' ? 'सर्व तपशील पूर्ण झाले आहेत. दाखल करण्यासाठी वरील बटण दाबा.' : 'All details ready. Click above to submit.'}
+              </p>
+            ) : (
               <p className="text-[11px] text-stone-500 mt-2.5 text-center leading-relaxed font-medium">
                 Keep chatting — the submit button unlocks once we have enough details.
               </p>

@@ -138,7 +138,6 @@ export default function ChatComplaint() {
   const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const typewriterRef = useRef(null);
-  const baseVoiceTextRef = useRef('');
 
   // Voice recognition setup
   const SpeechRecognitionCtor = useRef(
@@ -194,14 +193,13 @@ export default function ChatComplaint() {
     }
 
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch (_) {}
+      try { recognitionRef.current.abort(); } catch (_) {}
       recognitionRef.current = null;
       setListening(false);
       return;
     }
 
     setVoiceError('');
-    baseVoiceTextRef.current = input.trim();
 
     try {
       const rec = new SR();
@@ -216,13 +214,12 @@ export default function ChatComplaint() {
         for (let i = 0; i < e.results.length; i++) {
           transcript += e.results[i][0].transcript;
         }
-        const base = baseVoiceTextRef.current;
-        setInput(base ? `${base} ${transcript.trim()}` : transcript.trim());
+        setInput(transcript);
       };
 
       rec.onerror = (e) => {
         if (e.error === 'not-allowed') {
-          setVoiceError('Microphone permission blocked. Please allow mic access in your browser address bar.');
+          setVoiceError('Microphone permission blocked. Please allow mic in browser settings.');
         }
         recognitionRef.current = null;
         setListening(false);
@@ -240,7 +237,7 @@ export default function ChatComplaint() {
       console.warn('Speech error:', err);
       setListening(false);
     }
-  }, [lang, input]);
+  }, [lang]);
 
   // ── Send current location as chat message ────────────────────────────────
   const sendCurrentLocation = () => {
@@ -336,7 +333,7 @@ export default function ChatComplaint() {
 
   const sendMessage = async (text) => {
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch (_) {}
+      try { recognitionRef.current.abort(); } catch (_) {}
       recognitionRef.current = null;
       setListening(false);
     }
@@ -693,22 +690,22 @@ export default function ChatComplaint() {
                 {uploading ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={15} />}
               </button>
               <input
-                value={input.replace(/\u200B/g, '')}
+                value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                placeholder={listening ? (lang === 'mr' ? '🎤 ऐकत आहे... (मराठी/हिंदी/English बोला)' : lang === 'hi' ? '🎤 सुन रहा हूँ... बोलिए' : '🎤 Listening… speak now') : t('typeMessage')}
+                placeholder={listening ? (lang === 'mr' ? 'माईक चालू आहे... बोला' : lang === 'hi' ? 'माइक चालू है... बोलिए' : 'Listening... speak now') : t('typeMessage')}
                 className={`flex-1 bg-[#fbf8f2] border rounded-full px-4 py-2.5 text-sm text-stone-900 placeholder-stone-400 focus:bg-white focus:outline-none transition-all ${
-                  listening ? 'border-[#b85828] ring-2 ring-[#b85828]/25 bg-amber-50/20' : 'border-[#d6c4aa] focus:border-[#b85828] focus:ring-2 focus:ring-[#b85828]/15'
+                  listening ? 'border-red-400 bg-white' : 'border-[#d6c4aa] focus:border-[#b85828]'
                 }`}
               />
-              {/* Mic button */}
+              {/* Mic button without animations */}
               <button
                 type="button"
                 onClick={toggleListening}
                 title={listening ? 'Stop microphone' : 'Voice input (Microphone)'}
-                className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 transition-all ${
+                className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
                   listening
-                    ? 'bg-[#b85828] border-[#b85828] text-white shadow-md shadow-[#b85828]/35 animate-pulse scale-105'
+                    ? 'bg-red-600 border-red-600 text-white'
                     : hasSpeechAPI
                       ? 'border-[#d6c4aa] bg-[#fbf8f2] text-stone-700 hover:bg-[#faeedd] hover:border-[#b85828] hover:text-[#b85828]'
                       : 'border-stone-200 text-stone-300 cursor-not-allowed'
@@ -718,8 +715,8 @@ export default function ChatComplaint() {
               </button>
               <button
                 onClick={() => sendMessage()}
-                disabled={sending || !input.replace(/\u200B/g, '').trim()}
-                className="w-10 h-10 rounded-full bg-[#b85828] hover:bg-[#9c451a] disabled:opacity-40 text-white flex items-center justify-center shrink-0 shadow-md shadow-[#b85828]/25 transition-all"
+                disabled={sending || !input.trim()}
+                className="w-10 h-10 rounded-full bg-[#b85828] hover:bg-[#9c451a] disabled:opacity-40 text-white flex items-center justify-center shrink-0 shadow-sm transition-colors"
               >
                 <Send size={15} />
               </button>

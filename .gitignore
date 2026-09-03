@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production builds
+dist/
+build/
+
+# Local SQLite databases
+server/data.sqlite
+server/data.sqlite-wal
+server/data.sqlite-shm
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Environment variables & secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+server/.env
+server/.env.txt
+!.env.example
+!server/.env.example
+
+# Logs & temp
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db

@@ -3,13 +3,13 @@ import { Link } from 'react-router-dom';
 import {
   Bot, Send, Image as ImageIcon, X, MapPin, CheckCircle2, Loader2,
   RefreshCcw, ThumbsUp, Map as MapIcon, AlertCircle, Users,
-  Mic, MicOff, LocateFixed, User, Phone,
+  Mic, MicOff, User, Phone,
 } from 'lucide-react';
 import { useI18n } from '../i18n.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import api, { fileUrl } from '../api.js';
 import Navbar from '../components/Navbar.jsx';
-import LocationPicker, { fetchDetailedAddress } from '../components/LocationPicker.jsx';
+import LocationPicker from '../components/LocationPicker.jsx';
 import ComplaintReceipt from '../components/ComplaintReceipt.jsx';
 
 const CAT_LABEL = {
@@ -103,7 +103,6 @@ export default function ChatComplaint() {
   const [photos, setPhotos]           = useState([]);
   const [uploading, setUploading]     = useState(false);
   const [locationData, setLocationData] = useState(null);
-  const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [guestName, setGuestName]     = useState(user?.name || '');
   const [guestContact, setGuestContact] = useState(user?.phone || '');
 
@@ -123,8 +122,7 @@ export default function ChatComplaint() {
   const [voiceError, setVoiceError]       = useState('');
   const recognitionRef                    = useRef(null);
 
-  // Location state
-  const [locatingCurrent, setLocatingCurrent]         = useState(false);
+  // Inline map location state
   const [showInlineLocationPicker, setShowInlineLocationPicker] = useState(false);
 
   // Similar issue check state
@@ -238,50 +236,6 @@ export default function ChatComplaint() {
       setListening(false);
     }
   }, [lang]);
-
-  // ── Send current location as chat message ────────────────────────────────
-  const sendCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      setError('Geolocation is not supported in this browser.');
-      return;
-    }
-    setLocatingCurrent(true);
-    setError('');
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        try {
-          const addr = await fetchDetailedAddress(lat, lng);
-          setLocationData({ lat, lng, address: addr });
-          setExtracted((prev) => ({
-            ...prev,
-            location_text: addr,
-            latitude: lat,
-            longitude: lng,
-          }));
-          sendMessage(`${addr} (GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)})`);
-        } catch {
-          const fallbackAddr = 'Amravati, Maharashtra';
-          setLocationData({ lat, lng, address: fallbackAddr });
-          setExtracted((prev) => ({
-            ...prev,
-            location_text: fallbackAddr,
-            latitude: lat,
-            longitude: lng,
-          }));
-          sendMessage(`${fallbackAddr} (GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)})`);
-        } finally {
-          setLocatingCurrent(false);
-        }
-      },
-      (err) => {
-        setLocatingCurrent(false);
-        console.warn('Geolocation error:', err);
-        setError(lang === 'mr' ? 'GPS स्थान मिळवता आले नाही. कृपया लोकेशन परवानगी तपासा.' : 'Could not get location. Please allow location access.');
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-  };
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
@@ -589,10 +543,10 @@ export default function ChatComplaint() {
         />
       )}
 
-      <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 grid lg:grid-cols-[1fr_340px] gap-6">
+      <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 grid lg:grid-cols-[1fr_360px] gap-6 items-start">
 
         {/* ── Chat panel ─────────────────────────────────────── */}
-        <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-[#ebdcc9] shadow-xl flex flex-col h-[75vh] overflow-hidden">
+        <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-[#ebdcc9] shadow-xl flex flex-col h-[calc(100vh-140px)] min-h-[580px] max-h-[760px] overflow-hidden">
           {/* Subtle top hairline */}
           <div className="h-1 bg-gradient-to-r from-amber-500 via-orange-400 to-[#c8682e]" />
 
@@ -603,7 +557,9 @@ export default function ChatComplaint() {
                 <Bot size={20} />
               </div>
               <div>
-                <div className="text-sm font-extrabold text-stone-900 tracking-tight">तक्रार सहाय्यक (Takrar Sahayak)</div>
+                <div className="text-sm font-extrabold text-stone-900 tracking-tight">
+                  {lang === 'mr' ? 'गाऱ्हाणे निवारण सहाय्यक' : lang === 'hi' ? 'निवारण सहायक' : 'Grievance Redressal Assistant'}
+                </div>
                 <div className="text-[11px] flex items-center gap-1.5 text-stone-500 font-medium">
                   <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /> Online — AI Grievance Assistant
                 </div>
@@ -635,27 +591,6 @@ export default function ChatComplaint() {
                 </div>
               </div>
             ))}
-            {isReadyToSubmit && (
-              <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-2xl flex items-center justify-between shadow-xs">
-                <div className="pr-2">
-                  <div className="text-xs font-black text-emerald-900 flex items-center gap-1.5">
-                    <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
-                    <span>{lang === 'mr' ? 'सर्व माहिती तयार आहे! तक्रार नोंदवा:' : lang === 'hi' ? 'सभी विवरण तैयार हैं! शिकायत दर्ज करें:' : 'Details Ready! File your grievance:'}</span>
-                  </div>
-                  <p className="text-[11px] text-emerald-700 mt-0.5 font-medium">
-                    {lang === 'mr' ? 'तक्रार अधिकृतपणे महानगरपालिकेकडे दाखल करण्यासाठी येथे क्लिक करा.' : 'Click to officially submit your complaint to AMC.'}
-                  </p>
-                </div>
-                <button
-                  onClick={checkAndSubmit}
-                  disabled={submitting || checkingNearby}
-                  className="text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl shadow-xs transition-all flex items-center gap-1.5 shrink-0"
-                >
-                  {(submitting || checkingNearby) ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                  <span>{lang === 'mr' ? 'तक्रार दाखल करा ✓' : 'Submit Now ✓'}</span>
-                </button>
-              </div>
-            )}
             {sending && (
               <div className="flex justify-start">
                 <div className="w-8 h-8 rounded-2xl bg-[#faeedd] border border-[#ebdcc9] text-[#b85828] flex items-center justify-center shrink-0 mr-2.5 mt-0.5 shadow-2xs">
@@ -663,7 +598,7 @@ export default function ChatComplaint() {
                 </div>
                 <div className="bg-white border border-[#ebdcc9] rounded-2xl rounded-tl-xs px-4 py-2.5 flex items-center gap-2 shadow-xs text-xs text-stone-500 font-medium">
                   <Loader2 size={13} className="animate-spin text-[#c8682e]" />
-                  <span>{lang === 'mr' ? 'उत्तर तयार करत आहे...' : lang === 'hi' ? 'उत्तर तैयार कर रहा हूँ...' : 'Takrar Sahayak is typing…'}</span>
+                  <span>{lang === 'mr' ? 'उत्तर तयार करत आहे...' : lang === 'hi' ? 'उत्तर तैयार कर रहा हूँ...' : 'Assistant is typing…'}</span>
                 </div>
               </div>
             )}
@@ -705,19 +640,6 @@ export default function ChatComplaint() {
 
             {/* Quick-action row */}
             <div className="flex items-center gap-2 mb-2">
-              {/* Current location quick button */}
-              <button
-                type="button"
-                onClick={sendCurrentLocation}
-                disabled={locatingCurrent || sending}
-                title="Send my current location"
-                className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
-              >
-                {locatingCurrent
-                  ? <Loader2 size={11} className="animate-spin" />
-                  : <LocateFixed size={11} />}
-                {locatingCurrent ? 'Locating…' : 'Current Location'}
-              </button>
               {/* Open map picker */}
               <button
                 type="button"
@@ -729,7 +651,7 @@ export default function ChatComplaint() {
                     : 'border-[#d6c4aa] bg-[#fbf8f2] text-stone-700 hover:bg-[#faeedd]'
                 }`}
               >
-                <MapPin size={11} /> {showInlineLocationPicker ? 'Close Map' : 'Pick on Map'}
+                <MapPin size={11} /> {showInlineLocationPicker ? (lang === 'mr' ? 'नकाशा बंद करा' : 'Close Map') : (lang === 'mr' ? 'नकाशावर निवडा' : 'Pick on Map')}
               </button>
             </div>
 
@@ -821,19 +743,21 @@ export default function ChatComplaint() {
           </div>
         </div>
 
-        {/* ── Summary sidebar ─────────────────────────────────── */}
-        <div className="space-y-4">
-          {/* Summary card */}
-          <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-[#ebdcc9] shadow-xl p-5 sm:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-black text-stone-900 text-sm flex items-center gap-2">
-                <CheckCircle2 size={16} className="text-[#b85828]" /> {t('complaintSummary')}
-              </h3>
-              <span className="text-[10px] font-bold font-mono px-2.5 py-0.5 rounded-full bg-[#faeedd] border border-[#ebdcc9] text-[#b85828]">
-                {[Boolean(extracted.category), Boolean(locationData?.address || extracted.location_text), Boolean(extracted.description), Boolean(guestName || user?.name), Boolean(guestContact || user?.phone)].filter(Boolean).length}/5 Complete
-              </span>
-            </div>
-            <div className="space-y-2.5 text-sm">
+        {/* ── Summary sidebar (Equal Height Matching Chatbox) ── */}
+        <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-[#ebdcc9] shadow-xl p-5 flex flex-col h-[calc(100vh-140px)] min-h-[580px] max-h-[760px] overflow-hidden">
+          {/* Header */}
+          <div className="shrink-0 flex items-center justify-between pb-3 border-b border-[#ebdcc9]">
+            <h3 className="font-black text-stone-900 text-sm flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-[#b85828]" /> {t('complaintSummary')}
+            </h3>
+            <span className="text-[10px] font-bold font-mono px-2.5 py-0.5 rounded-full bg-[#faeedd] border border-[#ebdcc9] text-[#b85828]">
+              {[Boolean(extracted.category), Boolean(locationData?.address || extracted.location_text), Boolean(extracted.description), Boolean(guestName || user?.name), Boolean(guestContact || user?.phone)].filter(Boolean).length}/5 Complete
+            </span>
+          </div>
+
+          {/* Scrollable Summary Body */}
+          <div className="flex-1 overflow-y-auto py-3 space-y-3 pr-1 text-sm">
+            <div className="space-y-2 text-sm">
               <SummaryRow
                 label={t('problemType')}
                 value={extracted.category ? (CAT_LABEL[extracted.category] || tCategory(extracted.category)) : '—'}
@@ -849,50 +773,25 @@ export default function ChatComplaint() {
                 value={[extracted.description, extracted.duration_or_details].filter(Boolean).join(' · ') || '—'}
                 completed={Boolean(extracted.description)}
               />
-              <SummaryRow
-                label={lang === 'mr' ? 'तक्रारदार' : lang === 'hi' ? 'नागरिक' : 'Citizen Info'}
-                value={[guestName || user?.name, guestContact || user?.phone].filter(Boolean).join(' · ') || '—'}
-                completed={Boolean((guestName || user?.name) && (guestContact || user?.phone))}
-              />
+              {/* Photo placed directly after Details as requested */}
               <SummaryRow
                 label={t('photos')}
                 value={photos.length ? `${photos.length} uploaded` : '—'}
                 completed={photos.length > 0}
               />
+              <SummaryRow
+                label={lang === 'mr' ? 'नागरिक' : lang === 'hi' ? 'नागरिक' : 'Citizen Info'}
+                value={[guestName || user?.name, guestContact || user?.phone].filter(Boolean).join(' · ') || '—'}
+                completed={Boolean((guestName || user?.name) && (guestContact || user?.phone))}
+              />
             </div>
 
-            {/* Location picker */}
-            <button
-              onClick={() => setShowLocationPicker((v) => !v)}
-              className="mt-4 w-full flex items-center justify-center gap-2 text-xs border border-[#d6c4aa] text-[#b85828] bg-[#faeedd] hover:bg-[#f5e3cc] py-2.5 rounded-xl transition-all font-bold shadow-xs"
-            >
-              <MapPin size={13} /> {t('useMyLocation')}
-            </button>
-            {showLocationPicker && (
-              <div className="mt-3">
-                <LocationPicker
-                  value={locationData}
-                  onChange={(loc) => {
-                    setLocationData(loc);
-                    setExtracted((prev) => ({
-                      ...prev,
-                      location_text: loc.address,
-                      latitude: loc.lat,
-                      longitude: loc.lng,
-                    }));
-                    setShowLocationPicker(false);
-                    sendMessage(`${loc.address} (GPS: ${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)})`);
-                  }}
-                />
-              </div>
-            )}
-
             {/* Citizen Details (Name & Contact Number) */}
-            <div className="mt-4 border-t border-[#ebdcc9] pt-3.5 space-y-2.5">
+            <div className="mt-3 border-t border-[#ebdcc9] pt-3 space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-black text-stone-900 flex items-center gap-1.5">
                   <User size={13} className="text-[#b85828]" />
-                  <span>{lang === 'mr' ? 'आपले नाव व संपर्क नंबर' : lang === 'hi' ? 'आपका नाम व संपर्क नंबर' : 'Your Name & Contact Number'}</span>
+                  <span>{lang === 'mr' ? 'आपले नाव व संपर्क' : lang === 'hi' ? 'आपका नाम व संपर्क' : 'Your Name & Contact'}</span>
                 </label>
                 <span className="text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
                   {lang === 'mr' ? 'अधिकारी संपर्कासाठी' : 'For officer follow-up'}
@@ -908,7 +807,7 @@ export default function ChatComplaint() {
                     value={guestName}
                     onChange={(e) => setGuestName(e.target.value)}
                     placeholder={lang === 'mr' ? 'आपले पूर्ण नाव (उदा. राहुल देशमुख)' : lang === 'hi' ? 'आपका पूरा नाम (उदा. राहुल देशमुख)' : 'Your Full Name (e.g. Rahul Deshmukh)'}
-                    className="w-full text-xs pl-8 pr-3 py-2.5 border border-[#d6c4aa] rounded-xl bg-[#fbf8f2] text-stone-900 placeholder-stone-400 focus:bg-white focus:border-[#b85828] focus:ring-1 focus:ring-[#b85828] focus:outline-none transition-all font-medium"
+                    className="w-full text-xs pl-8 pr-3 py-2 border border-[#d6c4aa] rounded-xl bg-[#fbf8f2] text-stone-900 placeholder-stone-400 focus:bg-white focus:border-[#b85828] focus:ring-1 focus:ring-[#b85828] focus:outline-none transition-all font-medium"
                   />
                 </div>
                 <div className="relative">
@@ -921,17 +820,28 @@ export default function ChatComplaint() {
                     value={guestContact}
                     onChange={(e) => setGuestContact(e.target.value.replace(/\D/g, ''))}
                     placeholder={lang === 'mr' ? '१०-अंकी मोबाईल नंबर (उदा. ९८XXXXXXXX)' : lang === 'hi' ? '१०-अंकीय मोबाइल नंबर (उदा. ९८XXXXXXXX)' : '10-Digit Mobile / WhatsApp Number'}
-                    className="w-full text-xs pl-8 pr-3 py-2.5 border border-[#d6c4aa] rounded-xl bg-[#fbf8f2] text-stone-900 placeholder-stone-400 focus:bg-white focus:border-[#b85828] focus:ring-1 focus:ring-[#b85828] focus:outline-none transition-all font-mono"
+                    className="w-full text-xs pl-8 pr-3 py-2 border border-[#d6c4aa] rounded-xl bg-[#fbf8f2] text-stone-900 placeholder-stone-400 focus:bg-white focus:border-[#b85828] focus:ring-1 focus:ring-[#b85828] focus:outline-none transition-all font-mono"
                   />
                 </div>
               </div>
             </div>
 
-            {/* Submit button */}
+            {/* Quick Map Link */}
+            <Link
+              to="/map"
+              className="mt-2 flex items-center gap-2.5 p-2.5 rounded-xl border border-[#ebdcc9] bg-[#fbf8f2] hover:bg-[#faeedd] text-xs font-bold text-stone-700 hover:text-[#b85828] transition-all"
+            >
+              <MapIcon size={14} className="text-[#b85828] shrink-0" />
+              <span className="truncate">{lang === 'mr' ? 'अमरावती समस्या नकाशा पहा' : lang === 'hi' ? 'समस्या मानचित्र देखें' : 'View Amravati Issue Map'}</span>
+            </Link>
+          </div>
+
+          {/* Bottom Pinned Submit Area */}
+          <div className="shrink-0 pt-3 border-t border-[#ebdcc9]">
             <button
               onClick={checkAndSubmit}
               disabled={!isReadyToSubmit || submitting || checkingNearby}
-              className={`mt-5 w-full flex items-center justify-center gap-2 font-black py-3.5 rounded-2xl transition-all shadow-lg text-sm ${
+              className={`w-full flex items-center justify-center gap-2 font-black py-3 rounded-2xl transition-all shadow-lg text-sm ${
                 isReadyToSubmit
                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 cursor-pointer'
                   : 'bg-[#b85828] hover:bg-[#9c451a] disabled:opacity-40 text-white shadow-[#b85828]/25'
@@ -946,43 +856,18 @@ export default function ChatComplaint() {
                 : submitting
                 ? 'Submitting…'
                 : isReadyToSubmit
-                ? (lang === 'mr' ? 'तक्रार दाखल करा (Submit) ✓' : lang === 'hi' ? 'शिकायत दर्ज करें (Submit) ✓' : 'Submit Grievance ✓')
+                ? (lang === 'mr' ? 'गाऱ्हाणे दाखल करा (Submit) ✓' : lang === 'hi' ? 'निवारण दर्ज करें (Submit) ✓' : 'Submit Grievance ✓')
                 : t('submitComplaint')}
             </button>
             {isReadyToSubmit ? (
-              <p className="text-[11px] text-emerald-700 font-bold mt-2.5 text-center leading-relaxed">
+              <p className="text-[11px] text-emerald-700 font-bold mt-1.5 text-center leading-tight">
                 ✓ {lang === 'mr' ? 'सर्व तपशील पूर्ण झाले आहेत. दाखल करण्यासाठी वरील बटण दाबा.' : 'All details ready. Click above to submit.'}
               </p>
             ) : (
-              <p className="text-[11px] text-stone-500 mt-2.5 text-center leading-relaxed font-medium">
-                Keep chatting — the submit button unlocks once we have enough details.
+              <p className="text-[11px] text-stone-500 mt-1.5 text-center leading-tight font-medium">
+                {lang === 'mr' ? 'तपशील पूर्ण झाल्यावर हे बटण सक्रिय होईल.' : 'Unlocks once details are completed.'}
               </p>
             )}
-          </div>
-
-          {/* Map link */}
-          <Link
-            to="/map"
-            className="flex items-center gap-3 bg-white/95 backdrop-blur-md rounded-2xl border border-[#ebdcc9] shadow-md p-4 hover:border-[#b85828] hover:shadow-lg transition-all group"
-          >
-            <div className="w-10 h-10 rounded-2xl bg-[#faeedd] flex items-center justify-center group-hover:scale-105 transition-transform border border-[#ebdcc9]">
-              <MapIcon size={18} className="text-[#b85828]" />
-            </div>
-            <div>
-              <div className="text-sm font-black text-stone-900">View Issue Map</div>
-              <div className="text-xs text-stone-500">See all reported issues in your area</div>
-            </div>
-          </Link>
-
-          {/* Info box */}
-          <div className="bg-[#faeedd]/70 border border-[#ebdcc9] rounded-2xl p-4 text-xs text-stone-700 space-y-1.5 shadow-2xs">
-            <p className="font-black text-[#8c3d15] mb-2 flex items-center gap-1.5">
-              <span>🏛️</span> How it works:
-            </p>
-            <p>• Your complaint is automatically routed to the right AMC department.</p>
-            <p>• You'll receive a unique Complaint ID to track progress in real time.</p>
-            <p>• Before submitting, we check if a similar issue was reported nearby — you can upvote it instead.</p>
-            <p>• A human municipal officer reviews and resolves every complaint with photo proof.</p>
           </div>
         </div>
       </div>

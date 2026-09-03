@@ -88,7 +88,7 @@ router.post('/message', authOptional, async (req, res) => {
   const firstUserIdx = history.findIndex((h) => h.role === 'user');
   const trimmedHistory = firstUserIdx === -1 ? [] : history.slice(firstUserIdx);
 
-  const historyTurns = trimmedHistory.slice(-10).map((h) => ({
+  const historyTurns = trimmedHistory.slice(-4).map((h) => ({
     role: h.role === 'assistant' ? 'model' : 'user',
     text: h.text,
   }));
@@ -125,8 +125,8 @@ router.post('/message', authOptional, async (req, res) => {
         config: {
           systemInstruction: buildSystemPrompt(language),
           responseMimeType: 'application/json',
-          maxOutputTokens: 500,
-          temperature: 0.2,
+          maxOutputTokens: 220,
+          temperature: 0.1,
         },
       });
       const raw = (resp.text || '').trim();

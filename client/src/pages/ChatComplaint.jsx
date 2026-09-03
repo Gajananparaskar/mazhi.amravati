@@ -309,6 +309,24 @@ export default function ChatComplaint() {
     setMessages((m) => [...m, { role: 'user', text: outgoing }]);
     setInput('');
     setSending(true);
+
+    // Optimistic local heuristic extraction for 0ms instant UI update
+    const lower = outgoing.toLowerCase();
+    let optCat = null;
+    if (lower.includes('street') || lower.includes('light') || lower.includes('दिवा') || lower.includes('लाईट') || lower.includes('लाइट')) optCat = 'street_light';
+    else if (lower.includes('pothole') || lower.includes('road') || lower.includes('खड्डा') || lower.includes('रस्ता') || lower.includes('सड़क') || lower.includes('गड्ढा')) optCat = 'roads_potholes';
+    else if (lower.includes('garbage') || lower.includes('waste') || lower.includes('trash') || lower.includes('कचरा') || lower.includes('घाण')) optCat = 'garbage_waste';
+    else if (lower.includes('water') || lower.includes('pipe') || lower.includes('पाणी') || lower.includes('नल') || lower.includes('जल')) optCat = 'water_supply';
+    else if (lower.includes('drain') || lower.includes('sewer') || lower.includes('गटार') || lower.includes('नाली')) optCat = 'drainage_sewer';
+
+    if (optCat && !extracted.category) {
+      setExtracted((prev) => ({
+        ...prev,
+        category: optCat,
+        description: prev.description || outgoing,
+      }));
+    }
+
     try {
       const { data } = await api.post('/chatbot/message', {
         message: outgoing,
@@ -746,40 +764,43 @@ export default function ChatComplaint() {
 
         {/* ── Chat panel ─────────────────────────────────────── */}
         <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-[#ebdcc9] shadow-xl flex flex-col h-[75vh] overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-[#b85828] via-[#a84c1f] to-[#8c3d15] text-white px-5 py-4 flex items-center justify-between shadow-xs">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-2xl bg-white/15 flex items-center justify-center border border-white/25 shadow-xs">
-                <Bot size={18} />
+          {/* Subtle top hairline */}
+          <div className="h-1 bg-gradient-to-r from-amber-500 via-orange-400 to-[#c8682e]" />
+
+          {/* Header (Soft, eye-friendly, comfortable) */}
+          <div className="bg-[#fdfbf8] border-b border-[#ebdcc9] px-5 py-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#faeedd] border border-[#d6c4aa] flex items-center justify-center text-[#b85828] shadow-2xs">
+                <Bot size={20} />
               </div>
               <div>
-                <div className="text-sm font-extrabold tracking-tight">तक्रार सहाय्यक (Takrar Sahayak)</div>
-                <div className="text-[11px] flex items-center gap-1.5 text-amber-100/90 font-medium">
-                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" /> Online — AI Grievance Assistant
+                <div className="text-sm font-extrabold text-stone-900 tracking-tight">तक्रार सहाय्यक (Takrar Sahayak)</div>
+                <div className="text-[11px] flex items-center gap-1.5 text-stone-500 font-medium">
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /> Online — AI Grievance Assistant
                 </div>
               </div>
             </div>
             <button
               onClick={startNewChat}
-              className="flex items-center gap-1.5 text-xs bg-white/15 hover:bg-white/25 border border-white/20 px-3 py-1.5 rounded-xl transition-all font-bold"
+              className="flex items-center gap-1.5 text-xs bg-white hover:bg-[#faeedd] text-stone-700 hover:text-[#b85828] border border-[#d6c4aa] px-3.5 py-1.5 rounded-xl transition-all font-bold shadow-2xs"
             >
-              <RefreshCcw size={13} /> {t('newChat')}
+              <RefreshCcw size={12} /> {t('newChat')}
             </button>
           </div>
 
           {/* Messages */}
-          <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4 bg-[#fbf9f4]">
+          <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4 bg-[#fcfaf6]">
             {messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {m.role === 'assistant' && (
-                  <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-[#b85828] to-[#8c3d15] flex items-center justify-center shrink-0 mr-2.5 mt-0.5 shadow-xs text-white border border-white/20">
-                    <Bot size={15} />
+                  <div className="w-8 h-8 rounded-2xl bg-[#faeedd] border border-[#ebdcc9] text-[#b85828] flex items-center justify-center shrink-0 mr-2.5 mt-0.5 shadow-2xs">
+                    <Bot size={16} />
                   </div>
                 )}
-                <div className={`max-w-[78%] rounded-2xl px-4 py-3 text-xs sm:text-sm shadow-xs whitespace-pre-wrap leading-relaxed ${
+                <div className={`max-w-[78%] rounded-2xl px-4 py-3 text-xs sm:text-sm whitespace-pre-wrap leading-relaxed ${
                   m.role === 'user'
-                    ? 'bg-gradient-to-r from-[#b85828] to-[#9c451a] text-white rounded-tr-xs shadow-md shadow-[#b85828]/20 font-medium'
-                    : 'bg-white text-stone-900 rounded-tl-xs border border-[#ebdcc9] shadow-xs'
+                    ? 'bg-gradient-to-r from-[#d97736] to-[#c8682e] text-white rounded-tr-xs shadow-sm font-medium'
+                    : 'bg-white text-stone-800 rounded-tl-xs border border-[#ebdcc9] shadow-xs'
                 }`}>
                   {m.text}
                 </div>
@@ -787,13 +808,12 @@ export default function ChatComplaint() {
             ))}
             {sending && (
               <div className="flex justify-start">
-                <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-[#b85828] to-[#8c3d15] flex items-center justify-center shrink-0 mr-2.5 mt-0.5 shadow-xs text-white border border-white/20">
-                  <Bot size={15} />
+                <div className="w-8 h-8 rounded-2xl bg-[#faeedd] border border-[#ebdcc9] text-[#b85828] flex items-center justify-center shrink-0 mr-2.5 mt-0.5 shadow-2xs">
+                  <Bot size={16} />
                 </div>
-                <div className="bg-white border border-[#ebdcc9] rounded-2xl rounded-tl-xs px-4 py-3 flex items-center gap-1.5 shadow-xs">
-                  <span className="w-1.5 h-1.5 bg-[#b85828] rounded-full animate-bounce [animation-delay:0ms]" />
-                  <span className="w-1.5 h-1.5 bg-[#b85828] rounded-full animate-bounce [animation-delay:150ms]" />
-                  <span className="w-1.5 h-1.5 bg-[#b85828] rounded-full animate-bounce [animation-delay:300ms]" />
+                <div className="bg-white border border-[#ebdcc9] rounded-2xl rounded-tl-xs px-4 py-2.5 flex items-center gap-2 shadow-xs text-xs text-stone-500 font-medium">
+                  <Loader2 size={13} className="animate-spin text-[#c8682e]" />
+                  <span>{lang === 'mr' ? 'उत्तर तयार करत आहे...' : lang === 'hi' ? 'उत्तर तैयार कर रहा हूँ...' : 'Takrar Sahayak is typing…'}</span>
                 </div>
               </div>
             )}
@@ -856,7 +876,7 @@ export default function ChatComplaint() {
                   disabled={sending || locatingCurrent}
                   className={`shrink-0 text-xs px-3 py-1 rounded-full border transition-all ${
                     opt.isGPS
-                      ? 'bg-gradient-to-r from-amber-500 to-[#b85828] text-white font-extrabold border-[#b85828] shadow-xs hover:opacity-95'
+                      ? 'bg-amber-100 border border-amber-300 text-amber-950 font-black shadow-xs hover:bg-amber-200'
                       : activeChips.stage === 'specifics'
                       ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 font-semibold'
                       : activeChips.stage === 'details'

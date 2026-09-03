@@ -47,6 +47,12 @@ api.interceptors.response.use(
   }
 );
 
-export const fileUrl = (p) => (p?.startsWith('http') ? p : `${baseURL.replace(/\/api$/, '')}${p}`);
+export const fileUrl = (p) => {
+  if (!p) return '';
+  if (p.startsWith('http://') || p.startsWith('https://')) return p;
+  const root = baseURL.replace(/\/api$/, '');
+  const cleanPath = p.startsWith('/') ? p : (p.startsWith('uploads/') ? `/${p}` : `/uploads/${p}`);
+  return `${root}${cleanPath}`;
+};
 
 export default api;

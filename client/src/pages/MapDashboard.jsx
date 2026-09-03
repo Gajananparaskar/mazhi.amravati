@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom';
 import {
   Map as MapIcon, X, Share2, ThumbsUp, ExternalLink,
-  MapPin, Loader2,
+  MapPin, Loader2, CheckCircle2,
   AlertTriangle, Droplets, Lightbulb, Trash2, Wind, FileText,
   LocateFixed, Target,
 } from 'lucide-react';
@@ -92,9 +92,15 @@ export function cleanAddress(addr) {
 }
 
 // ── Individual Category Dot Icon ──────────────────────────────────────────────
-function makeCatIcon(category, upvotes = 0) {
+function makeCatIcon(category, upvotes = 0, isResolved = false) {
   const cfg = CAT[category] || CAT.other;
   const size = upvotes > 9 ? 34 : upvotes > 4 ? 28 : 24;
+  const bg = isResolved ? '#16a34a' : cfg.color;
+  const border = '2.5px solid #ffffff';
+  const shadow = isResolved
+    ? '0 0 0 3px rgba(22, 163, 74, 0.45), 0 3px 10px rgba(0,0,0,0.35)'
+    : '0 2px 8px rgba(0,0,0,0.3)';
+  const content = isResolved ? '✓' : (upvotes > 0 ? upvotes : '');
   return L.divIcon({
     className: 'custom-cat-marker',
     iconSize: [size, size],
@@ -102,12 +108,12 @@ function makeCatIcon(category, upvotes = 0) {
     popupAnchor: [0, -(size / 2 + 4)],
     html: `<div style="
       width: ${size}px; height: ${size}px; border-radius: 50%;
-      background: ${cfg.color}; border: 2.5px solid #ffffff;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      background: ${bg}; border: ${border};
+      box-shadow: ${shadow};
       display: flex; align-items: center; justify-content: center;
-      font-size: 10px; font-weight: 800; color: #ffffff;
+      font-size: ${isResolved ? '13px' : '10px'}; font-weight: 900; color: #ffffff;
       cursor: pointer; transition: transform 0.15s ease;
-    ">${upvotes > 0 ? upvotes : ''}</div>`,
+    ">${content}</div>`,
   });
 }
 
@@ -273,7 +279,7 @@ function ClusteredMarkers({ complaints, onUpvote, upvoting, upvoteDone, tCategor
           <Marker
             key={`complaint-${c.id}`}
             position={[lat, lng]}
-            icon={makeCatIcon(c.category, c.upvote_count || 0)}
+            icon={makeCatIcon(c.category, c.upvote_count || 0, c.status === 'resolved')}
           >
             <Popup minWidth={280} maxWidth={340} className="civic-custom-popup">
               <ComplaintPopup
@@ -734,19 +740,42 @@ function ComplaintPopup({ c, onUpvote, upvoting, upvoteDone, tCategory, lang }) 
 
       {/* Before & After / Photos Proof */}
       {c.status === 'resolved' && (photos.length > 0 || c.resolution_photo) ? (
-        <div className="mb-2 p-2 bg-emerald-50/90 border border-emerald-200 rounded-2xl">
-          <div className="text-[10px] font-black text-emerald-800 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-            <span>{lang === 'mr' ? '✓ निराकरण पुरावा' : '✓ Verified Resolution Proof'}</span>
-            <span className="text-[9px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-sm font-mono">100% SLA</span>
+        <div className="mb-2 p-2.5 bg-emerald-50/90 border border-emerald-200 rounded-2xl">
+          <div className="text-[10px] font-black text-emerald-800 uppercase tracking-wider mb-2 flex items-center justify-between">
+            <span className="flex items-center gap-1 font-bold">
+              <CheckCircle2 size={12} className="text-emerald-600" />
+              {lang === 'mr' ? 'निराकरण पुरावा (आधी व नंतर)' : lang === 'hi' ? 'समाधान प्रमाण (पहले व बाद)' : 'Resolution Proof (Before & After)'}
+            </span>
+            <span className="text-[9px] text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-md font-bold">100% Resolved</span>
           </div>
           {photos[0] && c.resolution_photo ? (
-            <BeforeAfterSlider
-              beforeSrc={photos[0]}
-              afterSrc={c.resolution_photo}
-              beforeLabel={lang === 'mr' ? 'आधी' : 'Before'}
-              afterLabel={lang === 'mr' ? 'नंतर' : 'After'}
-              height="h-36"
-            />
+            <div className="space-y-2">
+              <BeforeAfterSlider
+                beforeSrc={photos[0]}
+                afterSrc={c.resolution_photo}
+                beforeLabel={lang === 'mr' ? 'आधी (Reported)' : 'Before (Reported)'}
+                afterLabel={lang === 'mr' ? 'नंतर (Resolved)' : 'After (Resolved)'}
+                height="h-40"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <a href={fileUrl(photos[0])} target="_blank" rel="noreferrer" className="group block text-center">
+                  <div className="relative rounded-xl overflow-hidden border border-amber-300 shadow-2xs">
+                    <img src={fileUrl(photos[0])} alt="Before" className="w-full h-16 object-cover group-hover:scale-105 transition-transform" />
+                    <span className="absolute top-1 left-1 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                      {lang === 'mr' ? 'आधी' : 'Before'}
+                    </span>
+                  </div>
+                </a>
+                <a href={fileUrl(c.resolution_photo)} target="_blank" rel="noreferrer" className="group block text-center">
+                  <div className="relative rounded-xl overflow-hidden border border-emerald-400 shadow-2xs ring-1 ring-emerald-400">
+                    <img src={fileUrl(c.resolution_photo)} alt="After" className="w-full h-16 object-cover group-hover:scale-105 transition-transform" />
+                    <span className="absolute top-1 left-1 bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                      {lang === 'mr' ? 'नंतर ✓' : 'After ✓'}
+                    </span>
+                  </div>
+                </a>
+              </div>
+            </div>
           ) : (
             <div className="grid grid-cols-2 gap-1.5">
               {photos[0] ? (

@@ -557,9 +557,7 @@ export default function ChatComplaint() {
                 <Bot size={20} />
               </div>
               <div>
-                <div className="text-sm font-extrabold text-stone-900 tracking-tight">
-                  {lang === 'mr' ? 'गाऱ्हाणे निवारण सहाय्यक' : lang === 'hi' ? 'निवारण सहायक' : 'Grievance Redressal Assistant'}
-                </div>
+                <div className="text-sm font-extrabold text-stone-900 tracking-tight">तक्रार सहाय्यक (Takrar Sahayak)</div>
                 <div className="text-[11px] flex items-center gap-1.5 text-stone-500 font-medium">
                   <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /> Online — AI Grievance Assistant
                 </div>
@@ -856,7 +854,7 @@ export default function ChatComplaint() {
                 : submitting
                 ? 'Submitting…'
                 : isReadyToSubmit
-                ? (lang === 'mr' ? 'गाऱ्हाणे दाखल करा (Submit) ✓' : lang === 'hi' ? 'निवारण दर्ज करें (Submit) ✓' : 'Submit Grievance ✓')
+                ? (lang === 'mr' ? 'तक्रार दाखल करा (Submit) ✓' : lang === 'hi' ? 'शिकायत दर्ज करें (Submit) ✓' : 'Submit Complaint ✓')
                 : t('submitComplaint')}
             </button>
             {isReadyToSubmit ? (

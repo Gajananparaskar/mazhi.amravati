@@ -589,7 +589,7 @@ export default function ChatComplaint() {
         />
       )}
 
-      <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 grid lg:grid-cols-[1fr_340px] gap-6">
+      <div className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-6 pb-20 sm:pb-28 grid lg:grid-cols-[1fr_340px] gap-6">
 
         {/* ── Chat panel (Fluid h-[75vh] like before) ── */}
         <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-[#ebdcc9] shadow-xl flex flex-col h-[75vh] min-h-[560px] overflow-hidden">
@@ -884,15 +884,6 @@ export default function ChatComplaint() {
                 </div>
               </div>
             </div>
-
-            {/* Quick Map Link */}
-            <Link
-              to="/map"
-              className="flex items-center gap-2.5 p-2.5 rounded-xl border border-[#ebdcc9] bg-[#fbf8f2] hover:bg-[#faeedd] text-xs font-bold text-stone-700 hover:text-[#b85828] transition-all"
-            >
-              <MapIcon size={14} className="text-[#b85828] shrink-0" />
-              <span className="truncate">{lang === 'mr' ? 'अमरावती समस्या नकाशा पहा' : lang === 'hi' ? 'समस्या मानचित्र देखें' : 'View Amravati Issue Map'}</span>
-            </Link>
 
             {/* Submit button */}
             <div className="pt-2">

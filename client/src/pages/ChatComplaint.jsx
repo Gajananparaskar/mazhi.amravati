@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Bot, Send, Image as ImageIcon, X, MapPin, CheckCircle2, Loader2,
   RefreshCcw, ThumbsUp, Map as MapIcon, AlertCircle, Users,
-  Mic, MicOff, LocateFixed, User, Phone,
+  Mic, LocateFixed, User, Phone,
 } from 'lucide-react';
 import { useI18n } from '../i18n.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -118,10 +118,6 @@ export default function ChatComplaint() {
   const [submitted, setSubmitted]     = useState(null);
   const [error, setError]             = useState('');
 
-  // Voice input state
-  const [listening, setListening]         = useState(false);
-  const [voiceError, setVoiceError]       = useState('');
-  const recognitionRef                    = useRef(null);
 
   // Inline map & GPS location state
   const [locatingCurrent, setLocatingCurrent]                   = useState(false);
@@ -185,59 +181,199 @@ export default function ChatComplaint() {
     }
   };
 
-  const toggleListening = useCallback(() => {
+  // Voice input state & refs
+  const [listening, setListening]               = useState(false);
+  const [voiceError, setVoiceError]             = useState('');
+  const [voiceSuccess, setVoiceSuccess]         = useState('');
+  const recognitionRef                          = useRef(null);
+  const isHoldingRef                            = useRef(false);
+  const pressStartTimeRef                       = useRef(0);
+  const baseInputRef                            = useRef('');
+  const accumulatedTextRef                      = useRef('');
+  const isListeningRef                          = useRef(false);
+
+  // Stop listening helper
+  const stopListening = useCallback(() => {
+    isListeningRef.current = false;
+    isHoldingRef.current = false;
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (_) {
+        try { recognitionRef.current.abort(); } catch (_) {}
+      }
+      recognitionRef.current = null;
+    }
+    setListening(false);
+  }, []);
+
+  // Start listening helper
+  const startListening = useCallback(() => {
     const SR = SpeechRecognitionCtor.current;
     if (!SR) {
-      setVoiceError('Voice input requires Google Chrome or Microsoft Edge.');
+      setVoiceError(
+        lang === 'mr'
+          ? 'व्हॉईस इनपुटसाठी कृपया Google Chrome किंवा Microsoft Edge वापरा.'
+          : lang === 'hi'
+          ? 'वॉइस इनपुट के लिए कृपया Google Chrome या Microsoft Edge का उपयोग करें.'
+          : 'Voice input requires Google Chrome or Microsoft Edge.'
+      );
       return;
     }
 
     if (recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch (_) {}
       recognitionRef.current = null;
-      setListening(false);
-      return;
     }
 
     setVoiceError('');
+    setVoiceSuccess('');
+    baseInputRef.current = input.trim();
+    accumulatedTextRef.current = '';
 
     try {
       const rec = new SR();
       const speechLangMap = { mr: 'mr-IN', hi: 'hi-IN', en: 'en-IN' };
-      rec.lang = speechLangMap[lang] || 'en-IN';
+      rec.lang = speechLangMap[lang] || 'mr-IN';
       rec.interimResults = true;
       rec.maxAlternatives = 1;
       rec.continuous = true;
 
+      rec.onstart = () => {
+        setListening(true);
+        isListeningRef.current = true;
+      };
+
       rec.onresult = (e) => {
-        let transcript = '';
+        let finalSegment = '';
+        let interimSegment = '';
         for (let i = 0; i < e.results.length; i++) {
-          transcript += e.results[i][0].transcript;
+          const res = e.results[i];
+          if (res.isFinal) {
+            finalSegment += res[0].transcript + ' ';
+          } else {
+            interimSegment += res[0].transcript;
+          }
         }
-        setInput(transcript);
+        accumulatedTextRef.current = (finalSegment + interimSegment).trim();
+        const base = baseInputRef.current;
+        const total = base
+          ? `${base} ${accumulatedTextRef.current}`
+          : accumulatedTextRef.current;
+        if (total) {
+          setInput(total);
+        }
       };
 
       rec.onerror = (e) => {
-        if (e.error === 'not-allowed') {
-          setVoiceError('Microphone permission blocked. Please allow mic in browser settings.');
+        console.warn('Speech recognition error:', e.error);
+        if (e.error === 'no-speech') {
+          // User paused; ignore if holding
+          if (isHoldingRef.current && isListeningRef.current) return;
+        } else if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          setVoiceError(
+            lang === 'mr'
+              ? 'मायक्रोफोन परवानगी ब्लॉक आहे. कृपया ब्राउझरमध्ये परवानगी द्या.'
+              : lang === 'hi'
+              ? 'माइक अनुमति ब्लॉक है. कृपया ब्राउज़र में अनुमति दें.'
+              : 'Microphone permission blocked. Please allow mic in browser settings.'
+          );
+        } else if (e.error === 'audio-capture') {
+          setVoiceError(
+            lang === 'mr'
+              ? 'मायक्रोफोन आढळला नाही. कृपया माईक तपासा.'
+              : lang === 'hi'
+              ? 'माइक्रोफ़ोन नहीं मिला. कृपया माइक जांचें.'
+              : 'No microphone found on your device.'
+          );
+        } else if (e.error !== 'aborted') {
+          setVoiceError(
+            lang === 'mr'
+              ? `व्हॉईस इनपुट त्रुटी (${e.error}). कृपया पुन्हा प्रयत्न करा.`
+              : `Voice error (${e.error}). Please try again.`
+          );
         }
-        recognitionRef.current = null;
         setListening(false);
+        isListeningRef.current = false;
+        recognitionRef.current = null;
       };
 
       rec.onend = () => {
-        recognitionRef.current = null;
+        if (isHoldingRef.current && isListeningRef.current) {
+          try {
+            rec.start();
+            return;
+          } catch (_) {}
+        }
         setListening(false);
+        isListeningRef.current = false;
+        recognitionRef.current = null;
       };
 
       recognitionRef.current = rec;
       rec.start();
       setListening(true);
+      isListeningRef.current = true;
     } catch (err) {
-      console.warn('Speech error:', err);
+      console.warn('Speech start exception:', err);
+      setVoiceError('Could not start microphone: ' + err.message);
       setListening(false);
+      isListeningRef.current = false;
     }
-  }, [lang]);
+  }, [lang, input]);
+
+  // Hold start
+  const handleMicPressStart = useCallback((e) => {
+    if (e.type === 'mousedown' && e.button !== 0) return;
+    isHoldingRef.current = true;
+    pressStartTimeRef.current = Date.now();
+    if (!isListeningRef.current) {
+      startListening();
+    }
+  }, [startListening]);
+
+  // Hold release
+  const handleMicPressEnd = useCallback(() => {
+    if (!isHoldingRef.current) return;
+    const holdDuration = Date.now() - (pressStartTimeRef.current || 0);
+    isHoldingRef.current = false;
+
+    if (holdDuration > 250) {
+      stopListening();
+      if (accumulatedTextRef.current) {
+        setVoiceSuccess(
+          lang === 'mr'
+            ? '✓ आवाज ओळखला गेला! मजकूर चॅटमध्ये जोडला आहे.'
+            : lang === 'hi'
+            ? '✓ आवाज़ पहचान ली गई! टेक्स्ट चैट में जोड़ा गया.'
+            : '✓ Voice captured into chat!'
+        );
+        setTimeout(() => setVoiceSuccess(''), 3500);
+      }
+    }
+  }, [lang, stopListening]);
+
+  // Click toggle (for quick click without hold)
+  const handleMicClick = useCallback((e) => {
+    e.preventDefault();
+    const holdDuration = Date.now() - (pressStartTimeRef.current || 0);
+    if (holdDuration > 250) return;
+
+    if (listening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  }, [listening, startListening, stopListening]);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch (_) {}
+      }
+    };
+  }, []);
 
   // ── Send current location as chat message ────────────────────────────────
   const sendCurrentLocation = () => {
@@ -714,6 +850,40 @@ export default function ChatComplaint() {
               </button>
             </div>
 
+            {/* Live voice feedback while holding / listening */}
+            {listening && (
+              <div className="flex items-center justify-between gap-2 mb-2 px-3.5 py-1.5 bg-red-50 border border-red-300/90 rounded-full text-red-700 text-xs font-semibold shadow-xs animate-pulse">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600" />
+                  </span>
+                  <span>
+                    {lang === 'mr'
+                      ? '🎙️ माईक चालू आहे — बोलून झाल्यावर माईक सोडा, मजकूर चॅटमध्ये येईल'
+                      : lang === 'hi'
+                      ? '🎙️ माइक चालू है — बोलकर माइक छोड़ें, टेक्स्ट चैट में आएगा'
+                      : '🎙️ Mic listening — speak now, release button to put text in chat'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={stopListening}
+                  className="text-red-600 hover:text-red-900 text-[11px] font-bold underline cursor-pointer"
+                >
+                  {lang === 'mr' ? 'थांबवा' : 'Stop'}
+                </button>
+              </div>
+            )}
+
+            {/* Voice success message */}
+            {voiceSuccess && !listening && (
+              <div className="flex items-center gap-1.5 mb-2 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-emerald-700 text-xs font-semibold">
+                <CheckCircle2 size={13} className="text-emerald-600" />
+                <span>{voiceSuccess}</span>
+              </div>
+            )}
+
             {/* Main input row */}
             <div className="flex items-center gap-2">
               <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleFiles} />
@@ -729,25 +899,41 @@ export default function ChatComplaint() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                placeholder={listening ? (lang === 'mr' ? 'माईक चालू आहे... बोला' : lang === 'hi' ? 'माइक चालू है... बोलिए' : 'Listening... speak now') : t('typeMessage')}
+                placeholder={
+                  listening
+                    ? (lang === 'mr' ? '🎙️ ऐकत आहे... बोलत राहा (सोडल्यावर मजकूर येईल)' : lang === 'hi' ? '🎙️ सुन रहा हूँ... बोलते रहिए (छोड़ने पर टेक्स्ट आएगा)' : '🎙️ Listening... speak now (release when done)')
+                    : t('typeMessage')
+                }
                 className={`flex-1 bg-[#fbf8f2] border rounded-full px-4 py-2.5 text-sm text-stone-900 placeholder-stone-400 focus:bg-white focus:outline-none transition-all ${
-                  listening ? 'border-red-400 bg-white' : 'border-[#d6c4aa] focus:border-[#b85828]'
+                  listening ? 'border-red-400 bg-white ring-2 ring-red-200' : 'border-[#d6c4aa] focus:border-[#b85828]'
                 }`}
               />
-              {/* Mic button without animations */}
+              {/* Mic button with Hold-to-Speak (Push-to-Talk) & Click-to-Talk */}
               <button
                 type="button"
-                onClick={toggleListening}
-                title={listening ? 'Stop microphone' : 'Voice input (Microphone)'}
-                className={`w-10 h-10 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                onMouseDown={handleMicPressStart}
+                onMouseUp={handleMicPressEnd}
+                onMouseLeave={handleMicPressEnd}
+                onTouchStart={handleMicPressStart}
+                onTouchEnd={handleMicPressEnd}
+                onTouchCancel={handleMicPressEnd}
+                onClick={handleMicClick}
+                onContextMenu={(e) => e.preventDefault()}
+                title={
                   listening
-                    ? 'bg-red-600 border-red-600 text-white'
+                    ? (lang === 'mr' ? 'माईक थांबवा / सोडा' : 'Release or click to stop mic')
+                    : (lang === 'mr' ? 'माईक दाबून धरा आणि बोला (Hold to Speak)' : 'Hold to Speak or Click to Talk')
+                }
+                className={`relative w-10 h-10 rounded-full border flex items-center justify-center shrink-0 transition-all select-none cursor-pointer ${
+                  listening
+                    ? 'bg-red-600 border-red-600 text-white shadow-lg ring-4 ring-red-200 scale-105 animate-pulse'
                     : hasSpeechAPI
-                      ? 'border-[#d6c4aa] bg-[#fbf8f2] text-stone-700 hover:bg-[#faeedd] hover:border-[#b85828] hover:text-[#b85828]'
+                      ? 'border-[#d6c4aa] bg-[#fbf8f2] text-stone-700 hover:bg-[#faeedd] hover:border-[#b85828] hover:text-[#b85828] active:scale-95'
                       : 'border-stone-200 text-stone-300 cursor-not-allowed'
                 }`}
+                style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
               >
-                {listening ? <MicOff size={16} /> : <Mic size={16} />}
+                {listening ? <Mic size={17} className="animate-bounce" /> : <Mic size={16} />}
               </button>
               <button
                 onClick={() => sendMessage()}
